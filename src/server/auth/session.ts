@@ -6,7 +6,7 @@ import { cookies } from "next/headers";
 
 import { env } from "@/config/env";
 import { repositories } from "@/server/repositories";
-import type { BoSessionAdmin } from "@/server/auth/types";
+import type { BoSessionAdmin, StoredBoSession } from "@/server/auth/types";
 
 export const BO_SESSION_COOKIE = "bo_admin_session";
 
@@ -51,11 +51,22 @@ export async function getCurrentBoAdmin(): Promise<BoSessionAdmin | null> {
   }
 
   const tokenHash = hashSessionToken(token);
-  const session = await repositories.sessions.findByTokenHash(tokenHash);
+  let session: StoredBoSession | null;
+
+  try {
+    session = await repositories.sessions.findByTokenHash(tokenHash);
+  } catch (error: unknown) {
+    console.error("Unable to validate the BO session.", error);
+    return null;
+  }
 
   if (!session || session.expiresAt <= new Date()) {
     if (session) {
-      await repositories.sessions.deleteByTokenHash(tokenHash);
+      try {
+        await repositories.sessions.deleteByTokenHash(tokenHash);
+      } catch (error: unknown) {
+        console.error("Unable to remove the expired BO session.", error);
+      }
     }
     return null;
   }

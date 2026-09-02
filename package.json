@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:ready": "npm run db:local && npm run dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint src scripts prisma/seed.ts eslint.config.mjs next.config.ts --max-warnings=0",
@@ -12,6 +13,7 @@
     "format:check": "prettier --check .",
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
+    "db:local": "npx --yes prisma@7.10.0 dev --name ws-ai-agent --detach",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
