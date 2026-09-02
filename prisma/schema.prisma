@@ -1,0 +1,277 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PlatformAdminRole {
+  SUPER_ADMIN
+  ADMIN
+  SUPPORT
+  FINANCE
+}
+
+enum AdminStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+enum PlanStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum ProvisioningStatus {
+  PENDING
+  PROVISIONING
+  READY
+  FAILED
+}
+
+model PlatformAdmin {
+  id             String             @id @default(cuid())
+  name           String
+  email          String             @unique
+  passwordHash   String
+  role           PlatformAdminRole
+  status         AdminStatus        @default(INVITED)
+  lastSignedInAt DateTime?          @db.Timestamptz(3)
+  createdAt      DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime           @updatedAt @db.Timestamptz(3)
+  sessions       AdminSession[]
+  auditLogs      PlatformAuditLog[]
+
+  @@index([status])
+}
+
+model AdminSession {
+  id        String        @id @default(cuid())
+  tokenHash String        @unique
+  adminId   String
+  expiresAt DateTime      @db.Timestamptz(3)
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+  admin     PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([expiresAt])
+}
+
+model TenantUser {
+  id          String             @id @default(cuid())
+  name        String
+  email       String             @unique
+  createdAt   DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime           @updatedAt @db.Timestamptz(3)
+  memberships TenantMembership[]
+}
+
+model Tenant {
+  id               String                    @id @default(cuid())
+  name             String
+  slug             String                    @unique
+  status           TenantStatus              @default(TRIAL)
+  createdAt        DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime                  @updatedAt @db.Timestamptz(3)
+  memberships      TenantMembership[]
+  subscriptions    Subscription[]
+  databaseRegistry TenantDatabaseRegistry?
+  whatsappRoutes   WhatsappRoutingMetadata[]
+  usageSummaries   UsageSummary[]
+  billingMetadata  BillingMetadata?
+  featureFlags     TenantFeatureFlag[]
+
+  @@index([status])
+}
+
+model TenantMembership {
+  id        String           @id @default(cuid())
+  tenantId  String
+  userId    String
+  role      MembershipRole
+  status    MembershipStatus @default(INVITED)
+  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime         @updatedAt @db.Timestamptz(3)
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      TenantUser       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([userId])
+  @@index([tenantId, role])
+}
+
+model TenantDatabaseRegistry {
+  id                 String             @id @default(cuid())
+  tenantId           String             @unique
+  databaseKey        String             @unique
+  secretReference    String             @unique
+  region             String
+  provisioningStatus ProvisioningStatus @default(PENDING)
+  provisionedAt      DateTime?          @db.Timestamptz(3)
+  createdAt          DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime           @updatedAt @db.Timestamptz(3)
+  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([provisioningStatus])
+}
+
+model SubscriptionPlan {
+  id                  String         @id @default(cuid())
+  code                String         @unique
+  name                String
+  description         String
+  status              PlanStatus     @default(ACTIVE)
+  monthlyPriceMinor   Int
+  currency            String         @db.VarChar(3)
+  monthlyMessageLimit Int
+  adminSeatLimit      Int
+  whatsappNumberLimit Int
+  createdAt           DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime       @updatedAt @db.Timestamptz(3)
+  subscriptions       Subscription[]
+
+  @@index([status])
+}
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  tenantId           String
+  planId             String
+  status             SubscriptionStatus @default(TRIALING)
+  currentPeriodStart DateTime           @db.Timestamptz(3)
+  currentPeriodEnd   DateTime           @db.Timestamptz(3)
+  cancelAtPeriodEnd  Boolean            @default(false)
+  createdAt          DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime           @updatedAt @db.Timestamptz(3)
+  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  plan               SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@index([planId])
+  @@index([currentPeriodEnd])
+}
+
+model PlatformAiSettings {
+  id                 String   @id @default("platform")
+  defaultProviderKey String
+  defaultModelKey    String
+  isEnabled          Boolean  @default(false)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+}
+
+model PlatformConfiguration {
+  id              String   @id @default("platform")
+  maintenanceMode Boolean  @default(false)
+  supportEmail    String
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+}
+
+model WhatsappRoutingMetadata {
+  id            String   @id @default(cuid())
+  tenantId      String
+  phoneNumberId String   @unique
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, isActive])
+}
+
+model UsageSummary {
+  id                String   @id @default(cuid())
+  tenantId          String
+  periodStart       DateTime @db.Date
+  periodEnd         DateTime @db.Date
+  messagesProcessed Int      @default(0)
+  aiTokensConsumed  BigInt   @default(0)
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, periodStart, periodEnd])
+  @@index([periodStart, periodEnd])
+}
+
+model BillingMetadata {
+  id                        String   @id @default(cuid())
+  tenantId                  String   @unique
+  billingEmail              String
+  externalCustomerReference String?  @unique
+  createdAt                 DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime @updatedAt @db.Timestamptz(3)
+  tenant                    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model FeatureFlag {
+  id                 String              @id @default(cuid())
+  key                String              @unique
+  description        String
+  isEnabledByDefault Boolean             @default(false)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+  tenantOverrides    TenantFeatureFlag[]
+}
+
+model TenantFeatureFlag {
+  id            String      @id @default(cuid())
+  tenantId      String
+  featureFlagId String
+  isEnabled     Boolean
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime    @updatedAt @db.Timestamptz(3)
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  featureFlag   FeatureFlag @relation(fields: [featureFlagId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, featureFlagId])
+  @@index([featureFlagId])
+}
+
+model PlatformAuditLog {
+  id           String         @id @default(cuid())
+  actorAdminId String?
+  action       String
+  entityType   String
+  entityId     String?
+  metadata     Json
+  occurredAt   DateTime       @default(now()) @db.Timestamptz(3)
+  actorAdmin   PlatformAdmin? @relation(fields: [actorAdminId], references: [id], onDelete: SetNull)
+
+  @@index([actorAdminId])
+  @@index([entityType, entityId])
+  @@index([occurredAt])
+}

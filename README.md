@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# WhatsApp AI Sales Agent — Back Office
 
-## Getting Started
+Production-oriented foundation for the platform administration surface of a
+multi-tenant WhatsApp AI Sales Agent SaaS.
 
-First, run the development server:
+## Commands
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run lint
+npm run typecheck
+npm run build
+npm run format:check
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Copy `.env.example` to `.env.local` when local overrides are needed. All
+environment values are parsed at the server boundary with Zod.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Master database
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Set `DATABASE_URL` to a PostgreSQL master database, then run:
 
-## Learn More
+```bash
+npm run db:migrate
+npm run db:seed
+```
 
-To learn more about Next.js, take a look at the following resources:
+The seed command reads the development administrator email and password from
+`BO_SEED_ADMIN_EMAIL` and `BO_SEED_ADMIN_PASSWORD`, hashes the password, and
+stores only the hash. Local `.env` files are ignored by Git.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Architecture
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `src/app` contains App Router composition, route boundaries, and API handlers.
+- `src/features` owns master-domain types and feature-specific presentation.
+- `src/server/repositories/contracts` defines persistence-independent ports.
+- `src/server/repositories/mock` and `src/server/data/mock` retain isolated mock
+  adapters for tests and offline development.
+- `src/server/repositories/prisma` contains the active PostgreSQL adapters.
+- `src/server/services` contains application use cases and coordinates repositories.
+- `src/components` contains design-system, shared-state, and application-shell UI.
+- `src/config`, `src/constants`, `src/schemas`, and `src/types` contain cross-cutting,
+  stable definitions.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The BO domain models only master-database responsibilities. Operational tenant
+data belongs in each tenant database and must not be introduced into these
+repositories.
