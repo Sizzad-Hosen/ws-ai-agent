@@ -14,7 +14,7 @@ export interface PublicNavItem {
  */
 export const PUBLIC_NAV: readonly PublicNavItem[] = [
   { label: "Product", href: ROUTES.public.product },
-  { label: "Solutions", href: ROUTES.public.solutions },
+  { label: "Services", href: ROUTES.public.solutions },
   { label: "Resources", href: ROUTES.public.demo },
   { label: "Pricing", href: ROUTES.public.pricing },
   { label: "FAQ", href: ROUTES.public.faq },
