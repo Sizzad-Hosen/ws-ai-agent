@@ -110,7 +110,15 @@ export default async function WhatsappPage({
       <PageHeader
         title="WhatsApp Accounts"
         description="Manage and monitor global WhatsApp Business API connections."
-        actions={<Button variant="secondary">Export Data</Button>}
+        actions={
+          <Button
+            variant="secondary"
+            disabled
+            title="Export is not implemented yet."
+          >
+            Export Data
+          </Button>
+        }
       />
 
       {summary === null ? (

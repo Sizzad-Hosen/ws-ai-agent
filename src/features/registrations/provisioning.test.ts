@@ -105,4 +105,19 @@ describe("formatTenantCode", () => {
     expect(formatTenantCode(1)).toBe("TEN-00001");
     expect(formatTenantCode(10_251)).toBe("TEN-10251");
   });
+
+  it("widens past five digits rather than truncating", () => {
+    // Unpadded, "TEN-100000" sorts below "TEN-99999" and the next-code lookup
+    // would begin reissuing numbers already in use.
+    expect(formatTenantCode(99_999)).toBe("TEN-99999");
+    expect(formatTenantCode(100_000)).toBe("TEN-100000");
+    expect(formatTenantCode(1_000_000)).toBe("TEN-1000000");
+  });
+
+  it("does not claim to sort as text past five digits", () => {
+    // Widening the pad cannot preserve text ordering — "TEN-100000" still
+    // sorts below "TEN-99999" — which is exactly why the next-code lookup
+    // compares the parsed number instead of ordering by the column.
+    expect(["TEN-100000", "TEN-99999"].sort()[0]).toBe("TEN-100000");
+  });
 });

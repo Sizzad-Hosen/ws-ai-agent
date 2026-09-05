@@ -63,7 +63,14 @@ export function buildWebsiteUrl(
   return root === "" ? null : `https://${subdomain}.${root}`;
 }
 
-/** Human-facing tenant reference, matching the seeded TEN-##### shape. */
+/**
+ * Human-facing tenant reference, matching the seeded TEN-##### shape.
+ *
+ * Padding keeps the common case aligned; it does not make the codes sortable as
+ * text, because no fixed width can once the digit count grows. The next-code
+ * lookup therefore compares parsed numbers rather than ordering by the column.
+ */
 export function formatTenantCode(sequence: number): string {
-  return `TEN-${String(sequence).padStart(5, "0")}`;
+  const width = sequence > 99_999 ? String(sequence).length : 5;
+  return `TEN-${String(sequence).padStart(width, "0")}`;
 }

@@ -155,6 +155,8 @@ export async function getTenantPrisma(
       connectionString: buildConnectionString(target, password),
       connectionTimeoutMillis: 10_000,
       idleTimeoutMillis: 30_000,
+      // Bounds execution, not just acquisition.
+      options: "-c statement_timeout=10000",
       // Per-tenant pools are small: many tenants share one Postgres server.
       max: 5,
     }),
