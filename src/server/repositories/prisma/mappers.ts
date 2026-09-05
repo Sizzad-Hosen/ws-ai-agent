@@ -71,7 +71,7 @@ const adminStatusMap: Record<PrismaAdminStatus, AdminStatus> = {
   [PrismaAdminStatus.SUSPENDED]: "suspended",
 };
 
-const tenantApprovalMap: Record<
+export const tenantApprovalMap: Record<
   PrismaTenantApprovalStatus,
   TenantApprovalStatus
 > = {

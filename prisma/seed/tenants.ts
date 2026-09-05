@@ -185,6 +185,22 @@ export const TENANT_SEEDS: readonly TenantSeed[] = [
   },
 ];
 
+/**
+ * Host label for a tenant, derived from its business name for seed data only.
+ *
+ * Real tenants get an explicitly assigned subdomain: deriving one from a name
+ * cannot survive a rename and cannot guarantee uniqueness. Collisions here
+ * would surface as a unique-constraint failure rather than silently routing two
+ * tenants to one host.
+ */
+function seedSubdomain(businessName: string): string {
+  return businessName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 63);
+}
+
 export async function seedTenants(
   planIds: Readonly<Record<string, string>>,
 ): Promise<void> {
@@ -193,10 +209,11 @@ export async function seedTenants(
   for (const seed of TENANT_SEEDS) {
     const tenant = await prisma.tenant.upsert({
       where: { tenantCode: seed.tenantCode },
-      update: {},
+      update: { subdomain: seedSubdomain(seed.businessName) },
       create: {
         tenantCode: seed.tenantCode,
         businessName: seed.businessName,
+        subdomain: seedSubdomain(seed.businessName),
         ownerName: seed.ownerName,
         ownerEmail: seed.ownerEmail,
         ownerPhone: seed.ownerPhone,

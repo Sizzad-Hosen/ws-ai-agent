@@ -9,6 +9,7 @@ import { prisma } from "@/server/db/prisma";
 import type {
   TenantListQuery,
   TenantRepository,
+  TenantRoutingTarget,
 } from "@/server/repositories/contracts/tenant-repository";
 import type { PaginatedResult } from "@/types/repository";
 import type { TenantApprovalStatus as DomainTenantApprovalStatus } from "@/types/status";
@@ -17,6 +18,7 @@ import {
   mapPlan,
   mapTenant,
   mapTenantDatabase,
+  tenantApprovalMap,
   tenantApprovalToPrisma,
 } from "./mappers";
 
@@ -29,6 +31,43 @@ const CURRENT_SUBSCRIPTION = {
 } as const;
 
 export class PrismaTenantRepository implements TenantRepository {
+  async findRoutingTargetBySubdomain(
+    subdomain: string,
+  ): Promise<TenantRoutingTarget | null> {
+    const tenant = await prisma.tenant.findUnique({
+      where: { subdomain },
+      select: {
+        id: true,
+        businessName: true,
+        approvalStatus: true,
+        database: {
+          select: {
+            databaseName: true,
+            hostReference: true,
+            port: true,
+            usernameReference: true,
+            secretReference: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!tenant?.database) return null;
+
+    return {
+      tenantId: tenant.id,
+      businessName: tenant.businessName,
+      approvalStatus: tenantApprovalMap[tenant.approvalStatus],
+      databaseName: tenant.database.databaseName,
+      host: tenant.database.hostReference,
+      port: tenant.database.port,
+      username: tenant.database.usernameReference,
+      secretReference: tenant.database.secretReference,
+      provisioned: tenant.database.status === "READY",
+    };
+  }
+
   async findById(id: string): Promise<Tenant | null> {
     const tenant = await prisma.tenant.findUnique({ where: { id } });
     return tenant ? mapTenant(tenant) : null;
