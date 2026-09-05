@@ -1,5 +1,14 @@
 export const ROUTES = {
   home: "/",
+  public: {
+    home: "/",
+    product: "/how-it-works",
+    demo: "/demo",
+    solutions: "/solutions",
+    pricing: "/pricing",
+    company: "/about",
+    register: "/register",
+  },
   auth: {
     login: "/bo/login",
   },

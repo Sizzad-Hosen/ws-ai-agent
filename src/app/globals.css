@@ -188,3 +188,92 @@
   margin-inline: auto;
   width: 100%;
 }
+
+/*
+ * Public site tokens — docs/uiux/public-site/DESIGN.md ("Precision-Led
+ * Minimalism"). Deliberately named apart from the back-office tokens above:
+ * the two systems share a product but not a visual language, and one must
+ * never drift when the other is retuned.
+ */
+:root {
+  --ps-page: #f9fafb;
+  --ps-panel: #ffffff;
+  --ps-panel-soft: #f3f4f6;
+  --ps-ink: #1a1a1a;
+  --ps-ink-muted: #4b5563;
+  --ps-ink-subtle: #6b7280;
+  --ps-edge: #e5e7eb;
+  --ps-brand: #10b981;
+  --ps-brand-deep: #006c49;
+  --ps-brand-wash: #ecfdf5;
+}
+
+@theme inline {
+  --color-ps-page: var(--ps-page);
+  --color-ps-panel: var(--ps-panel);
+  --color-ps-panel-soft: var(--ps-panel-soft);
+  --color-ps-ink: var(--ps-ink);
+  --color-ps-ink-muted: var(--ps-ink-muted);
+  --color-ps-ink-subtle: var(--ps-ink-subtle);
+  --color-ps-edge: var(--ps-edge);
+  --color-ps-brand: var(--ps-brand);
+  --color-ps-brand-deep: var(--ps-brand-deep);
+  --color-ps-brand-wash: var(--ps-brand-wash);
+
+  --font-display: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+
+  /* "Disparate Rounding": containers soften, controls stay precise. */
+  --radius-card: 1.5rem;
+  --radius-control: 0.75rem;
+  --radius-field: 0.5rem;
+
+  /* Soft environmental shadow — never a heavy, dark drop. */
+  --shadow-float: 0 10px 30px rgb(0 0 0 / 0.04);
+
+  --text-display-lg: 4rem;
+  --text-display-lg--line-height: 4.5rem;
+  --text-display-lg--letter-spacing: -0.02em;
+  --text-display-lg--font-weight: 600;
+  --text-display-md: 2.5rem;
+  --text-display-md--line-height: 3rem;
+  --text-display-md--letter-spacing: -0.02em;
+  --text-display-md--font-weight: 600;
+  --text-title-lg: 2rem;
+  --text-title-lg--line-height: 2.5rem;
+  --text-title-lg--letter-spacing: -0.01em;
+  --text-title-lg--font-weight: 500;
+  --text-lead: 1.125rem;
+  --text-lead--line-height: 1.75rem;
+  --text-copy: 1rem;
+  --text-copy--line-height: 1.5rem;
+  --text-eyebrow: 0.8125rem;
+  --text-eyebrow--line-height: 1rem;
+  --text-eyebrow--letter-spacing: 0.05em;
+  --text-eyebrow--font-weight: 600;
+}
+
+@utility container-ps {
+  max-width: 1280px;
+  margin-inline: auto;
+  width: 100%;
+  padding-inline: 1rem;
+
+  @media (width >= 48rem) {
+    padding-inline: 1.5rem;
+  }
+}
+
+/* Vertical rhythm: 120px desktop, 64px mobile (DESIGN.md → Layout & Spacing). */
+@utility section-ps {
+  padding-block: 4rem;
+
+  @media (width >= 48rem) {
+    padding-block: 7.5rem;
+  }
+}
+
+/* Navigation glass layer. */
+@utility glass-ps {
+  background-color: rgb(255 255 255 / 0.8);
+  backdrop-filter: blur(12px);
+}

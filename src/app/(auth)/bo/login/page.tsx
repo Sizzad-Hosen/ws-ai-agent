@@ -7,6 +7,8 @@ import { getCurrentBoAdmin } from "@/server/auth/session";
 
 export const metadata: Metadata = {
   title: "Admin sign in",
+  // Sits outside the (bo) group, so it needs its own opt-out.
+  robots: { index: false, follow: false },
 };
 
 export default async function BoLoginPage() {
