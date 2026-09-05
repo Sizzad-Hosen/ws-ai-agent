@@ -253,6 +253,130 @@ Verification scripts, both of which restore the state they touch:
 
 ---
 
+## 2.12 Public site and multi-tenancy
+
+Source: `docs/uiux/public-site/` (six screens plus `DESIGN.md`).
+
+### Design system
+
+The public site does not share the back office's visual language. `DESIGN.md`
+specifies Precision-Led Minimalism — 24px cards, charcoal CTAs, emerald reserved
+for accents and success, 120px section rhythm, Geist for headings over Inter for
+copy. Its tokens are namespaced `--ps-*` alongside the existing set rather than
+layered over them, and its primitives live in `src/features/public-site/`
+instead of `src/components/ui/`, so retuning one language cannot disturb the
+other.
+
+### Pages
+
+| Route | Screen | Data |
+|---|---|---|
+| `/` | 01 landing | static copy; brand from `public_site_settings` |
+| `/how-it-works` | 02 workflow | static |
+| `/demo` | 03 automation demo | scripted transcript |
+| `/solutions` | 04 industries | static |
+| `/pricing` | 05 pricing | **`plans`** |
+| `/about` | 06 about | static |
+| `/register` | — | writes **`tenant_registrations`** |
+
+Three divergences from the mockups, each deliberate:
+
+- **The annual "-20%" badge is derived, not hard-coded.** A badge promising a
+  discount the catalogue does not give is a pricing error, so it is computed
+  from the plans and disappears when there is no saving. It currently reads
+  -20%, matching the mockup, because the seeded prices happen to give exactly
+  that.
+- **Prices come from the database, so they are the seeded $99/$299, not the
+  mockup's $49/$149.** Editing a plan in the back office moves the public page
+  without a deploy; marking one inactive removes it.
+- **The nav slot the mockups label "Services" on screen 04 and "Solutions"
+  everywhere else** is "Solutions" throughout. Two names for one destination is
+  a defect, not a design.
+
+`/register` is not in the mockups but every CTA pointed at it. It closes the
+loop the schema already implies: a public application writes a `PENDING_REVIEW`
+row with its three review checks and appears on screen 03. No tenant and no
+database are provisioned until an administrator approves it.
+
+Two images on screen 06 have no licensed asset in the repo; a brand gradient and
+a labelled placeholder stand in, both marked in source for replacement.
+
+### Multi-tenancy: host-based routing
+
+The public site is the platform's own marketing site — `public_pages`,
+`public_faqs` and `public_site_settings` carry no `tenant_id`. Multi-tenancy is
+therefore implemented as the routing layer `tenant_databases` already implies:
+a request on a tenant's host is served from that tenant's own database.
+
+```
+acme.example.com
+      │
+      ▼  proxy.ts (pre-render, no state, may run on a CDN)
+   parse host ──► label "acme" ──► x-tenant-label header
+      │
+      ▼  Node runtime: resolveTenant() (deduped per request)
+   tenants.subdomain lookup ──► tenant + tenant_databases row
+      │
+      ▼  secret provider (port; no adapter in this repo)
+   secret_reference ──► credential
+      │
+      ▼  cached per-tenant PrismaClient
+```
+
+Design constraints that shaped it:
+
+- **Host parsing fails closed.** A wrong answer serves one tenant's data on
+  another tenant's host, so anything doubtful returns "no tenant" rather than
+  "some tenant": nested labels, foreign roots, suffix smuggling
+  (`acme.example.com.evil.com`), invalid DNS labels and reserved platform labels
+  are all rejected, and an unset `TENANT_ROOT_DOMAIN` disables routing entirely.
+- **Tenant headers are unforgeable.** Both are stripped from every inbound
+  request before being set, so a client cannot send `x-tenant-label` to a
+  platform host and be served another tenant.
+- **Resolution is split by runtime because it must be.** The proxy runs before
+  rendering and may be deployed to a CDN, so it cannot reach the database; it
+  decides only whether a host *looks* tenant-scoped.
+- **`tenants.subdomain` is new and not in the ERD.** Routing needs an explicit
+  mapping: deriving one from the business name or tenant code breaks on rename
+  and cannot guarantee a valid, unique DNS label. Unique at the database level,
+  because two tenants on one host is a data-leak class of bug.
+- **Credentials stay behind a port.** `secret_reference` is a pointer into a
+  secret manager, never the credential (S-03), so resolution is an interface
+  whose production implementation fails every lookup rather than degrading. The
+  env-backed provider is refused outside development.
+- **Pools are cached and bounded.** A `PrismaClient` owns a connection pool, so
+  one per request would exhaust Postgres in seconds. Clients are keyed by a
+  signature of the target — a rotated secret or moved host invalidates the entry
+  rather than serving the old pool — evicted after five idle minutes, capped at
+  25.
+- A suspended or unprovisioned tenant keeps its host but is not served from it.
+
+**Not yet done.** No tenant database is actually reachable in this environment:
+there is no secret manager, so `secret-unavailable` is the expected outcome
+today. The layer is complete up to that boundary. Per-tenant storefronts (a
+tenant's own products and branding on their host) would need new tables and are
+a separate piece of work.
+
+### Verification
+
+| Command | Covers |
+|---|---|
+| `npm run verify:auth` | credential rejection, sign-in, session persistence |
+| `npm run verify:writes` | plan CRUD, AI configuration, site settings, tenant lifecycle |
+| `npm run verify:public` | pricing from the catalogue, registration reaching the review queue |
+| `npm run verify:tenancy` | 15 host-parsing cases, secret-provider policy, routing lookup |
+
+Each restores the state it touches.
+
+### Still open
+
+`/register` is **anonymous and writes a row**, with no rate limiting. It needs
+an IP or captcha gate before the site is publicly reachable. This sits with the
+audit-log gap (§2.3): neither is a blocker for development, both are for
+production.
+
+---
+
 ## 3. Architecture analysis
 
 **Observed stack** (from the repo, no design doc): Next.js 16.3.4 App Router, React 19.2.8, TypeScript strict, Tailwind v4, Prisma 6 + `@prisma/adapter-pg`, Zod 4, react-hook-form, bcryptjs, `server-only` boundaries.
