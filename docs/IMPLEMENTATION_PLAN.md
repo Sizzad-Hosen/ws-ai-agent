@@ -223,11 +223,12 @@ The mockups are out of date on these points.
 | **System Settings made editable** | Backed by `public_site_settings` (brand, contact, announcement), with a versioned jsonb contract in `src/features/system/site-settings.ts` mirroring the `plans.features` approach (D-05). Each key degrades to defaults independently. Maintenance mode and feature flags remain unavailable — no table (§2.1 / D-32). |
 | **REST API routes added** | Server Actions remain the UI's path; REST handlers under `src/app/api/` expose the same operations for external callers. Lifecycle and delete rules are shared modules, not duplicated, so the two entry points cannot drift. |
 
-These lifecycle mutations are **not yet audited** — `platform_audit_logs` is not
-in the ERD (§2.3). Approving, rejecting or suspending a tenant, changing a
-price, editing the global token limit or changing the public support address all
-currently leave no record of who did it. That should be closed before this
-reaches a real environment.
+These lifecycle mutations **are audited**. `platform_audit_logs` is not in the
+ERD, and was added for this: every tenant decision, registration approve/reject,
+plan write, AI configuration change and site-settings change records the actor,
+the entity and what changed. Entries are append-only, metadata is scrubbed of
+anything credential-shaped, and the write happens inside the shared lifecycle
+functions so a new entry point cannot skip it.
 
 ### 2.11a Local database
 
@@ -407,11 +408,20 @@ Decisions worth recording:
 
 ### Still open
 
-`/register` is **anonymous and writes a row**, with no rate limiting. It needs
-an IP or captcha gate before the site is publicly reachable. This sits with the
-audit-log gap (§2.3) — approving a tenant now creates a tenant, a database
-record and a subscription, and still leaves no record of who did it. Neither is
-a blocker for development; both are for production.
+Nothing provisions an actual tenant database, so `tenant_databases` records the
+intent with a secret reference no secret manager can resolve.
+
+Impersonation ("Login as Tenant", screen 04) needs a scoped, audited, revocable
+grant that the schema does not model (S-02 / D-12); the control is disabled and
+says so.
+
+Export is unimplemented on four screens; those buttons are disabled rather than
+inert.
+
+`tenant_registrations.owner_email` has no partial unique index, so two
+simultaneous applications from one address can both queue. Only one can ever
+provision — `tenants.owner_email` is unique — so this is a reviewer seeing two
+applications, not a data-integrity fault.
 
 Nothing provisions an actual tenant database. `tenant_databases` records the
 intent, with a secret reference no secret manager can resolve; an external
