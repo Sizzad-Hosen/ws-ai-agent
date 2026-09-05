@@ -22,6 +22,13 @@ const MAX_PER_EMAIL = 10;
 /** Higher, because a shared office NAT is one address for many people. */
 const MAX_PER_ADDRESS = 30;
 
+/**
+ * Public sign-up is anonymous and writes rows, so it is limited by address
+ * alone. Lower than the login ceiling because a person legitimately submits an
+ * application once, not thirty times.
+ */
+const MAX_REGISTRATIONS_PER_ADDRESS = 5;
+
 export interface ThrottleDecision {
   readonly allowed: boolean;
   /** Seconds until the window frees up; 0 when allowed. */
@@ -100,6 +107,51 @@ export async function checkLoginAllowed(
   }
 
   return ALLOWED;
+}
+
+/**
+ * Throttle for the anonymous registration endpoint.
+ *
+ * Shares the sliding window rather than growing a second mechanism; the
+ * identifier namespace keeps the two counts apart.
+ */
+export async function checkRegistrationAllowed(
+  address: string | null,
+): Promise<ThrottleDecision> {
+  if (address === null) return ALLOWED;
+
+  const key = `register:${address}`.slice(0, 200);
+  const since = new Date(Date.now() - WINDOW_MS);
+
+  let counts: Map<string, number>;
+
+  try {
+    counts = await countSince([key], since);
+  } catch (error: unknown) {
+    console.error("Unable to read registration attempt history.", error);
+    return ALLOWED;
+  }
+
+  if ((counts.get(key) ?? 0) >= MAX_REGISTRATIONS_PER_ADDRESS) {
+    return { allowed: false, retryAfterSeconds: Math.ceil(WINDOW_MS / 1000) };
+  }
+
+  return ALLOWED;
+}
+
+/** Records an accepted registration against the address window. */
+export async function recordRegistration(
+  address: string | null,
+): Promise<void> {
+  if (address === null) return;
+
+  try {
+    await prisma.loginAttempt.create({
+      data: { identifier: `register:${address}`.slice(0, 200) },
+    });
+  } catch (error: unknown) {
+    console.error("Unable to record a registration attempt.", error);
+  }
 }
 
 export async function recordFailedLogin(

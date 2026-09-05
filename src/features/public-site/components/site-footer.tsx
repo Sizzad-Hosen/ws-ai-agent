@@ -24,7 +24,7 @@ export function SiteFooter({ brandName, supportEmail }: SiteFooterProps) {
           {supportEmail ? (
             <a
               href={`mailto:${supportEmail}`}
-              className="text-ps-brand hover:text-ps-brand-deep inline-block text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+              className="text-ps-brand-deep hover:text-ps-brand-deep/80 inline-block text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               {supportEmail}
             </a>

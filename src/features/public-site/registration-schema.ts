@@ -39,6 +39,12 @@ export const registrationFormSchema = z.object({
     .trim()
     .min(2, "Choose your primary region.")
     .max(80, "Region must be 80 characters or fewer."),
+  /**
+   * Honeypot. Hidden from people and from assistive technology, so a value
+   * here means a bot filled every field it could find. Named plausibly
+   * because "honeypot" in the markup defeats the purpose.
+   */
+  companyWebsite: z.string().max(200).optional(),
 });
 
 export type RegistrationFormValues = z.infer<typeof registrationFormSchema>;
