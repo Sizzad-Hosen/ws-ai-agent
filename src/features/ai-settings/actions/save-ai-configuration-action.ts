@@ -8,6 +8,7 @@ import {
   aiConfigurationFormSchema,
   toAiConfigurationSettings,
 } from "@/features/ai-settings/schemas";
+import { AUDIT_ACTIONS, recordAudit } from "@/server/audit/audit-log";
 import { requirePermission } from "@/server/auth/authorization";
 import { repositories } from "@/server/repositories";
 
@@ -19,14 +20,13 @@ export interface AiConfigurationActionResult {
 
 /**
  * Saves the platform AI configuration.
- *
- * Note: this action is not audited. `platform_audit_logs` is not in the ERD
- * (§2.3), so a change to the global token limit leaves no record of who made it.
  */
 export async function saveAiConfigurationAction(
   input: unknown,
 ): Promise<AiConfigurationActionResult> {
-  await requirePermission(PLATFORM_PERMISSIONS.AI_SETTINGS_MANAGE);
+  const actor = await requirePermission(
+    PLATFORM_PERMISSIONS.AI_SETTINGS_MANAGE,
+  );
 
   const parsed = aiConfigurationFormSchema.safeParse(input);
 
@@ -62,6 +62,20 @@ export async function saveAiConfigurationAction(
       message: "That change could not be saved. Please try again.",
     };
   }
+
+  await recordAudit({
+    actor,
+    action: AUDIT_ACTIONS.AI_CONFIGURATION_UPDATE,
+    entityType: "settings",
+    entityId: "platform_ai_configuration",
+    metadata: {
+      providerId: values.providerId,
+      modelId: values.modelId,
+      isActive: values.isActive,
+      globalTokenLimit: values.globalTokenLimit,
+      warningThresholdPercent: values.warningThresholdPercent,
+    },
+  });
 
   revalidatePath(ROUTES.bo.aiSettings);
 

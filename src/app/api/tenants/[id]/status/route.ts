@@ -49,7 +49,11 @@ export async function POST(
   }
 
   const tenantId = params.data.id;
-  const result = await applyTenantDecision(tenantId, parsed.data.decision);
+  const result = await applyTenantDecision(
+    tenantId,
+    parsed.data.decision,
+    auth.admin,
+  );
 
   if (result.outcome === "not-found") {
     return apiError(result.message, 404);

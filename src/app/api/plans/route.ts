@@ -42,7 +42,7 @@ export async function POST(request: Request): Promise<Response> {
     return apiError("Check the submitted plan fields and try again.", 400);
   }
 
-  const result = await savePlan(null, parsed.data);
+  const result = await savePlan(null, parsed.data, auth.admin);
 
   if (result.outcome === "conflict") {
     return apiError(result.message, 409);

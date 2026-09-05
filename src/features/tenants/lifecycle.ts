@@ -1,6 +1,12 @@
 import "server-only";
 
 import type { Tenant } from "@/features/tenants/types";
+import {
+  AUDIT_ACTIONS,
+  recordAudit,
+  type AuditAction,
+} from "@/server/audit/audit-log";
+import type { BoSessionAdmin } from "@/server/auth/types";
 import { repositories } from "@/server/repositories";
 import type { TenantApprovalStatus } from "@/types/status";
 
@@ -72,19 +78,27 @@ export interface TenantDecisionResult {
   readonly approvalStatus: TenantApprovalStatus | null;
 }
 
+const AUDIT_ACTION_FOR: Readonly<Record<TenantDecision, AuditAction>> = {
+  approve: AUDIT_ACTIONS.TENANT_APPROVE,
+  reject: AUDIT_ACTIONS.TENANT_REJECT,
+  suspend: AUDIT_ACTIONS.TENANT_SUSPEND,
+  reactivate: AUDIT_ACTIONS.TENANT_REACTIVATE,
+};
+
 /**
  * Applies an approval or lifecycle decision to a tenant.
  *
  * Callers are responsible for authorisation and for any cache revalidation;
- * this function owns the transition rules and the write alone.
+ * this function owns the transition rules, the write, and the audit entry.
  *
- * Note: this change is not yet audited. `platform_audit_logs` is not in the
- * ERD (§2.3), so there is nowhere to record who suspended or approved what.
- * That gap should be closed before this reaches a real environment.
+ * The audit is written here rather than in each caller because the server
+ * action and the REST route both come through this function: recording it at
+ * the entry points would mean a new entry point could silently skip it.
  */
 export async function applyTenantDecision(
   tenantId: string,
   decision: TenantDecision,
+  actor: BoSessionAdmin,
 ): Promise<TenantDecisionResult> {
   let tenant: Tenant | null;
 
@@ -128,6 +142,18 @@ export async function applyTenantDecision(
       approvalStatus: tenant.approvalStatus,
     };
   }
+
+  await recordAudit({
+    actor,
+    action: AUDIT_ACTION_FOR[decision],
+    entityType: "tenant",
+    entityId: tenantId,
+    metadata: {
+      businessName: tenant.businessName,
+      from: tenant.approvalStatus,
+      to: targetStatusFor(decision),
+    },
+  });
 
   return {
     outcome: "applied",

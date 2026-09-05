@@ -21,7 +21,7 @@ const inputSchema = z.object({ planId: z.uuid("Unknown plan.") });
 export async function deletePlanAction(
   input: unknown,
 ): Promise<PlanActionResult> {
-  await requirePermission(PLATFORM_PERMISSIONS.PLANS_MANAGE);
+  const actor = await requirePermission(PLATFORM_PERMISSIONS.PLANS_MANAGE);
 
   const parsed = inputSchema.safeParse(input);
 
@@ -29,7 +29,7 @@ export async function deletePlanAction(
     return { success: false, message: "That request was not understood." };
   }
 
-  const result = await deletePlan(parsed.data.planId);
+  const result = await deletePlan(parsed.data.planId, actor);
 
   if (result.outcome !== "deleted") {
     return { success: false, message: result.message };

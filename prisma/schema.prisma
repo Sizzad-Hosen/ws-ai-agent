@@ -179,6 +179,36 @@ model AdminSession {
   @@map("admin_sessions")
 }
 
+/// Who did what in the console.
+///
+/// Not in the ERD, and named as §2.3 proposes. Records are append-only: an
+/// audit trail an administrator can edit is not an audit trail, so there is no
+/// update or delete path in the application.
+///
+/// `actorId` is a bare UUID with no foreign key on purpose — removing an
+/// administrator must not remove or block the record of what they did.
+model PlatformAuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String   @map("actor_id") @db.Uuid
+  /// Denormalised so the entry stays readable after the account is gone.
+  actorEmail String   @map("actor_email") @db.VarChar(190)
+  /// Dotted verb, e.g. "tenant.suspend" or "plan.delete".
+  action     String   @db.VarChar(120)
+  /// The kind of thing acted on, e.g. "tenant".
+  entityType String   @map("entity_type") @db.VarChar(60)
+  /// Null for settings that are not a row, e.g. the AI configuration.
+  entityId   String?  @map("entity_id") @db.VarChar(190)
+  /// What changed. Never credentials, never a secret reference.
+  metadata   Json?
+  ipAddress  String?  @map("ip_address") @db.VarChar(100)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@map("platform_audit_logs")
+}
+
 /// Failed sign-in attempts, for throttling.
 ///
 /// Not in the ERD. Recorded per email *and* per client address so a slow

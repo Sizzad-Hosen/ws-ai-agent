@@ -128,7 +128,7 @@ export async function PATCH(
     return apiError("Check the submitted plan fields and try again.", 400);
   }
 
-  const result = await savePlan(planId, merged.data);
+  const result = await savePlan(planId, merged.data, auth.admin);
 
   if (result.outcome === "not-found") {
     return apiError(result.message, 404);
@@ -165,7 +165,7 @@ export async function DELETE(
   }
 
   const planId = params.data.id;
-  const result = await deletePlan(planId);
+  const result = await deletePlan(planId, auth.admin);
 
   if (result.outcome === "not-found") {
     return apiError(result.message, 404);
