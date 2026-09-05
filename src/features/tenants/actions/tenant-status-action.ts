@@ -32,7 +32,7 @@ const inputSchema = z.object({
 export async function decideTenantStatusAction(
   input: unknown,
 ): Promise<TenantStatusResult> {
-  await requirePermission(PLATFORM_PERMISSIONS.TENANTS_MANAGE);
+  const actor = await requirePermission(PLATFORM_PERMISSIONS.TENANTS_MANAGE);
 
   const parsed = inputSchema.safeParse(input);
 
@@ -41,7 +41,7 @@ export async function decideTenantStatusAction(
   }
 
   const { tenantId, decision } = parsed.data;
-  const result = await applyTenantDecision(tenantId, decision);
+  const result = await applyTenantDecision(tenantId, decision, actor);
 
   if (result.outcome !== "applied") {
     return { success: false, message: result.message };

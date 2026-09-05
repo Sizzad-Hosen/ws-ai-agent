@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { PLATFORM_PERMISSIONS } from "@/constants/permissions";
 import { ROUTES } from "@/constants/routes";
 import { siteSettingsFormSchema } from "@/features/system/site-settings";
+import { AUDIT_ACTIONS, recordAudit } from "@/server/audit/audit-log";
 import { requirePermission } from "@/server/auth/authorization";
 import { repositories } from "@/server/repositories";
 
@@ -16,14 +17,11 @@ export interface SiteSettingsActionResult {
 
 /**
  * Saves the public site settings.
- *
- * Note: this action is not audited. `platform_audit_logs` is not in the ERD
- * (§2.3), so a change to the public support address leaves no record.
  */
 export async function saveSiteSettingsAction(
   input: unknown,
 ): Promise<SiteSettingsActionResult> {
-  await requirePermission(PLATFORM_PERMISSIONS.SETTINGS_MANAGE);
+  const actor = await requirePermission(PLATFORM_PERMISSIONS.SETTINGS_MANAGE);
 
   const parsed = siteSettingsFormSchema.safeParse(input);
 
@@ -53,6 +51,18 @@ export async function saveSiteSettingsAction(
       message: "That change could not be saved. Please try again.",
     };
   }
+
+  await recordAudit({
+    actor,
+    action: AUDIT_ACTIONS.SITE_SETTINGS_UPDATE,
+    entityType: "settings",
+    entityId: "public_site_settings",
+    metadata: {
+      brandName: parsed.data.brand.name,
+      supportEmail: parsed.data.contact.supportEmail,
+      announcementEnabled: parsed.data.announcement.enabled,
+    },
+  });
 
   revalidatePath(ROUTES.bo.system);
   revalidatePath(ROUTES.home);

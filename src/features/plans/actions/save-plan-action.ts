@@ -24,7 +24,7 @@ export async function savePlanAction(
   planId: string | null,
   input: unknown,
 ): Promise<PlanActionResult> {
-  await requirePermission(PLATFORM_PERMISSIONS.PLANS_MANAGE);
+  const actor = await requirePermission(PLATFORM_PERMISSIONS.PLANS_MANAGE);
 
   const parsed = planFormSchema.safeParse(input);
 
@@ -36,7 +36,7 @@ export async function savePlanAction(
     };
   }
 
-  const result = await savePlan(planId, parsed.data);
+  const result = await savePlan(planId, parsed.data, actor);
 
   if (result.outcome !== "saved") {
     return {

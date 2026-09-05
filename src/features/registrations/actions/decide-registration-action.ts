@@ -7,6 +7,7 @@ import { env } from "@/config/env";
 import { PLATFORM_PERMISSIONS } from "@/constants/permissions";
 import { ROUTES } from "@/constants/routes";
 import { allChecksPassed } from "@/features/registrations/types";
+import { AUDIT_ACTIONS, recordAudit } from "@/server/audit/audit-log";
 import { requirePermission } from "@/server/auth/authorization";
 import { repositories } from "@/server/repositories";
 
@@ -38,14 +39,11 @@ const inputSchema = z.object({
  * database row is written PENDING and the tenant starts on TRIAL rather than
  * ACTIVE. Claiming ACTIVE for a workspace with no database would be a lie the
  * whole console then repeats.
- *
- * Note: not audited. `platform_audit_logs` is not in the ERD (§2.3), so who
- * approved a tenant leaves no record.
  */
 export async function decideRegistrationAction(
   input: unknown,
 ): Promise<RegistrationDecisionResult> {
-  await requirePermission(PLATFORM_PERMISSIONS.TENANTS_MANAGE);
+  const actor = await requirePermission(PLATFORM_PERMISSIONS.TENANTS_MANAGE);
 
   const parsed = inputSchema.safeParse(input);
 
@@ -78,6 +76,17 @@ export async function decideRegistrationAction(
         message: "That registration was already reviewed.",
       };
     }
+
+    await recordAudit({
+      actor,
+      action: AUDIT_ACTIONS.REGISTRATION_REJECT,
+      entityType: "registration",
+      entityId: registrationId,
+      metadata: {
+        businessName: detail.registration.businessName,
+        registrationCode: detail.registration.registrationCode,
+      },
+    });
 
     revalidateReviewSurfaces(registrationId);
 
@@ -121,6 +130,25 @@ export async function decideRegistrationAction(
       message: failureMessage(outcome.reason, detail.registration.businessName),
     };
   }
+
+  // Everything the approval created, so the trail explains the new tenant.
+  await recordAudit({
+    actor,
+    action: AUDIT_ACTIONS.REGISTRATION_APPROVE,
+    entityType: "registration",
+    entityId: registrationId,
+    metadata: {
+      businessName: detail.registration.businessName,
+      registrationCode: detail.registration.registrationCode,
+      tenantId: outcome.tenant.tenantId,
+      tenantCode: outcome.tenant.tenantCode,
+      subdomain: outcome.tenant.subdomain,
+      databaseName: outcome.tenant.databaseName,
+      planName: plan.name,
+      priceSnapshot: plan.monthlyPrice,
+      currency: plan.currency,
+    },
+  });
 
   revalidateReviewSurfaces(registrationId);
   revalidatePath(ROUTES.bo.tenant(outcome.tenant.tenantId));

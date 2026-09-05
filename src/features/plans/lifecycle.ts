@@ -6,6 +6,8 @@ import {
   type PlanFormValues,
 } from "@/features/plans/schemas";
 import type { Plan, PlanListItem } from "@/features/plans/types";
+import { AUDIT_ACTIONS, recordAudit } from "@/server/audit/audit-log";
+import type { BoSessionAdmin } from "@/server/auth/types";
 import { repositories } from "@/server/repositories";
 
 /** Matches the first swatch offered by the plan form. */
@@ -48,6 +50,28 @@ function subscriberCount(count: number): string {
   return `${count} active subscriber${count === 1 ? "" : "s"}`;
 }
 
+/** Money is recorded as the stored string so the trail never rounds a price. */
+async function auditPlanWrite(
+  actor: BoSessionAdmin,
+  action: typeof AUDIT_ACTIONS.PLAN_CREATE | typeof AUDIT_ACTIONS.PLAN_UPDATE,
+  planId: string,
+  values: PlanFormValues,
+): Promise<void> {
+  await recordAudit({
+    actor,
+    action,
+    entityType: "plan",
+    entityId: planId,
+    metadata: {
+      name: values.name,
+      monthlyPrice: values.monthlyPrice,
+      annualPrice: values.annualPrice,
+      currency: values.currency,
+      isActive: values.isActive,
+    },
+  });
+}
+
 /**
  * Creates or updates a plan.
  *
@@ -55,12 +79,15 @@ function subscriberCount(count: number): string {
  * catalogue rules — code immutability, name uniqueness and the deactivation
  * guard — live here so every write path applies them identically.
  *
- * Note: plan writes are not audited. `platform_audit_logs` is not in the ERD
- * (§2.3), so there is nowhere to record who changed a price.
+ * The audit entry is written here, not in the callers: the server action and
+ * the REST route both come through this function, so recording it at the entry
+ * points would let a new entry point silently skip it.
+ *
  */
 export async function savePlan(
   planId: string | null,
   values: PlanFormValues,
+  actor: BoSessionAdmin,
 ): Promise<PlanSaveResult> {
   let existing: readonly PlanListItem[];
 
@@ -110,10 +137,19 @@ export async function savePlan(
       }
 
       const created = await repositories.plans.create(code, normalised);
+      await auditPlanWrite(
+        actor,
+        AUDIT_ACTIONS.PLAN_CREATE,
+        created.id,
+        values,
+      );
+
       return { outcome: "saved", message: "Plan created.", plan: created };
     }
 
     const updated = await repositories.plans.update(planId, normalised);
+    await auditPlanWrite(actor, AUDIT_ACTIONS.PLAN_UPDATE, updated.id, values);
+
     return { outcome: "saved", message: "Plan updated.", plan: updated };
   } catch (error: unknown) {
     console.error("Unable to save the plan.", error);
@@ -130,7 +166,10 @@ export async function savePlan(
  * foreign-key error, and deactivating remains the way to retire a plan that has
  * history.
  */
-export async function deletePlan(planId: string): Promise<PlanDeleteResult> {
+export async function deletePlan(
+  planId: string,
+  actor: BoSessionAdmin,
+): Promise<PlanDeleteResult> {
   let plans: readonly PlanListItem[];
 
   try {
@@ -163,6 +202,14 @@ export async function deletePlan(planId: string): Promise<PlanDeleteResult> {
       message: `${current.plan.name} is still referenced by past subscriptions or registrations, so it cannot be deleted. Deactivate it instead to hide it from customers.`,
     };
   }
+
+  await recordAudit({
+    actor,
+    action: AUDIT_ACTIONS.PLAN_DELETE,
+    entityType: "plan",
+    entityId: planId,
+    metadata: { name: current.plan.name, code: current.plan.code },
+  });
 
   return { outcome: "deleted", message: `${current.plan.name} deleted.` };
 }
