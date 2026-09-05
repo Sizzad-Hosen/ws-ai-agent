@@ -281,7 +281,10 @@ model Tenant {
   tenantCode     String               @unique @map("tenant_code") @db.VarChar(40)
   businessName   String               @map("business_name") @db.VarChar(180)
   ownerName      String               @map("owner_name") @db.VarChar(120)
-  ownerEmail     String               @map("owner_email") @db.VarChar(190)
+  /// Unique: one owner email is one tenant. Provisioning checks this before
+  /// it writes, but only the constraint makes the check safe under two
+  /// reviewers approving duplicate registrations at the same moment.
+  ownerEmail     String               @unique @map("owner_email") @db.VarChar(190)
   ownerPhone     String               @map("owner_phone") @db.VarChar(30)
   industry       String?              @db.VarChar(100)
   region         String?              @db.VarChar(80)

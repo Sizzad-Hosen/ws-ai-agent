@@ -17,6 +17,10 @@ import type {
 /** Attempts at a free host label before giving up. */
 const MAX_LABEL_ATTEMPTS = 25;
 
+/** Sentinel returned from the transaction so the caller can tell the two
+ * rollback reasons apart: a stale registration versus a duplicate owner. */
+const DUPLICATE_OWNER = "duplicate-owner" as const;
+
 /**
  * Placeholder connection references for a database that does not exist yet.
  *
@@ -53,17 +57,6 @@ export class PrismaProvisioningRepository implements ProvisioningRepository {
       return { ok: false, reason: "no-subdomain" };
     }
 
-    // The owner's email is the closest thing to an identity the ERD gives us,
-    // since tenants carry no registration_id (§2.5 / D-02).
-    const existing = await prisma.tenant.findFirst({
-      where: { ownerEmail: registration.ownerEmail },
-      select: { id: true },
-    });
-
-    if (existing) {
-      return { ok: false, reason: "already-provisioned" };
-    }
-
     try {
       const result = await prisma.$transaction(async (tx) => {
         // Re-read inside the transaction so two reviewers clicking Approve at
@@ -74,6 +67,19 @@ export class PrismaProvisioningRepository implements ProvisioningRepository {
         });
 
         if (locked.count === 0) return null;
+
+        // Re-checked inside the transaction. The owner's email is the closest
+        // thing to an identity the ERD gives us, since tenants carry no
+        // registration_id (§2.5 / D-02). A unique index on the column is what
+        // actually makes this safe against two reviewers approving duplicate
+        // registrations at the same moment; this read only turns that
+        // constraint into an explanation instead of a raw violation.
+        const existing = await tx.tenant.findUnique({
+          where: { ownerEmail: registration.ownerEmail },
+          select: { id: true },
+        });
+
+        if (existing) return DUPLICATE_OWNER;
 
         const subdomain = await this.claimSubdomain(tx, base);
         const databaseName = deriveDatabaseName(subdomain);
@@ -146,8 +152,23 @@ export class PrismaProvisioningRepository implements ProvisioningRepository {
         return { ok: false, reason: "not-pending" };
       }
 
+      if (result === DUPLICATE_OWNER) {
+        return { ok: false, reason: "already-provisioned" };
+      }
+
       return { ok: true, tenant: result };
     } catch (error: unknown) {
+      // The in-transaction read narrows the window; the constraint closes it.
+      // A violation here means another approval won the race, which is a
+      // duplicate rather than an unexplained failure.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002" &&
+        String(error.meta?.target ?? "").includes("owner_email")
+      ) {
+        return { ok: false, reason: "already-provisioned" };
+      }
+
       console.error("Tenant provisioning failed and was rolled back.", error);
       return { ok: false, reason: "failed" };
     }
