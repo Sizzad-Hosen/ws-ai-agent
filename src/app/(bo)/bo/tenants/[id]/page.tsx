@@ -1,14 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import {
-  Database,
-  EllipsisVertical,
-  Globe,
-  Hash,
-  MessageSquare,
-  Store,
-  Tag,
-} from "lucide-react";
+import { Database, Globe, Hash, MessageSquare, Store, Tag } from "lucide-react";
 
 import { CopyableValue } from "@/components/shared/copyable-value";
 import { PageHeader } from "@/components/shared/page-header";
@@ -23,6 +15,7 @@ import {
   TENANT_STATUS_LABELS,
   TENANT_STATUS_TONES,
 } from "@/features/tenants/status";
+import { TenantRowActions } from "@/features/tenants/components/tenant-row-actions";
 import { hasPermission, requirePermission } from "@/server/auth/authorization";
 import { repositories } from "@/server/repositories";
 import { formatDate } from "@/utils/format";
@@ -50,7 +43,6 @@ export default async function TenantDetailPage({
   );
   // Impersonation is the highest-privilege action in the console (S-02).
   const canImpersonate = admin.role === "super_admin";
-  const suspended = tenant.approvalStatus === "suspended";
 
   return (
     <div className="space-y-6">
@@ -82,17 +74,30 @@ export default async function TenantDetailPage({
         }
         actions={
           <>
+            {/*
+              Impersonation has no supporting model: it needs a scoped,
+              audited, revocable grant (S-02 / D-12) and there is no table for
+              one. The control stays visible but disabled and says so, rather
+              than advertising a capability that silently does nothing.
+            */}
             {canImpersonate ? (
-              <Button variant="ghost">Login as Tenant</Button>
-            ) : null}
-            {canManage ? (
-              <Button variant={suspended ? "secondary" : "danger"}>
-                {suspended ? "Reactivate" : "Suspend"}
+              <Button
+                variant="ghost"
+                disabled
+                title="Impersonation needs a scoped, audited grant that the schema does not model yet (S-02)."
+              >
+                Login as Tenant
               </Button>
             ) : null}
-            <Button variant="secondary" size="icon" aria-label="More actions">
-              <EllipsisVertical className="size-4" aria-hidden="true" />
-            </Button>
+            {canManage ? (
+              <TenantRowActions
+                tenantId={tenant.id}
+                businessName={tenant.businessName}
+                status={tenant.approvalStatus}
+                websiteUrl={tenant.websiteUrl}
+                canManage={canManage}
+              />
+            ) : null}
           </>
         }
       />

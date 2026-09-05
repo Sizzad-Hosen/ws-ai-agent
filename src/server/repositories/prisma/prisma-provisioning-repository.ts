@@ -207,17 +207,19 @@ export class PrismaProvisioningRepository implements ProvisioningRepository {
   }
 
   private async nextTenantCode(tx: Prisma.TransactionClient): Promise<string> {
-    const latest = await tx.tenant.findFirst({
+    // Compared numerically, not as text. Ordering by tenantCode would put
+    // "TEN-100000" below "TEN-99999" once the sequence passes five digits, and
+    // the next code would start reissuing numbers already in use.
+    const codes = await tx.tenant.findMany({
       where: { tenantCode: { startsWith: "TEN-" } },
-      orderBy: { tenantCode: "desc" },
       select: { tenantCode: true },
     });
 
-    const current = Number.parseInt(
-      latest?.tenantCode.replace("TEN-", "") ?? "",
-      10,
-    );
+    const highest = codes.reduce((max, row) => {
+      const value = Number.parseInt(row.tenantCode.slice(4), 10);
+      return Number.isFinite(value) && value > max ? value : max;
+    }, 10_000);
 
-    return formatTenantCode((Number.isFinite(current) ? current : 10_000) + 1);
+    return formatTenantCode(highest + 1);
   }
 }

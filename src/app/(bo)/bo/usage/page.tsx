@@ -63,7 +63,11 @@ export default async function UsagePage({
       description="Cost and consumption metrics across all tenants."
       actions={
         <>
-          <Button variant="secondary" disabled={summary === null}>
+          <Button
+            variant="secondary"
+            disabled
+            title="Export is not implemented yet."
+          >
             Export Data
           </Button>
           <div className="flex items-center gap-2">

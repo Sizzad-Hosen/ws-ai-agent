@@ -145,7 +145,15 @@ export default async function MessagesPage({
       <PageHeader
         title="Message Monitoring"
         description="Real-time log of AI and system communications."
-        actions={<Button variant="secondary">Export Logs</Button>}
+        actions={
+          <Button
+            variant="secondary"
+            disabled
+            title="Export is not implemented yet."
+          >
+            Export Logs
+          </Button>
+        }
       />
 
       <Card>

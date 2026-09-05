@@ -97,7 +97,13 @@ export default async function TenantsPage({
         description="Manage all tenant workspaces and platform usage."
         actions={
           <>
-            <Button variant="secondary">Export Data</Button>
+            <Button
+              variant="secondary"
+              disabled
+              title="Export is not implemented yet."
+            >
+              Export Data
+            </Button>
             <Button asChild>
               <Link href={ROUTES.bo.registrations}>Registration queue</Link>
             </Button>

@@ -13,6 +13,9 @@ const adapter = new PrismaPg({
   connectionString: env.DATABASE_URL,
   connectionTimeoutMillis: 10_000,
   idleTimeoutMillis: 30_000,
+  // Bounds execution, not just acquisition: without it one slow query holds a
+  // request open indefinitely.
+  options: "-c statement_timeout=10000",
   keepAlive: true,
   max: 10,
 });
