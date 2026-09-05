@@ -16,18 +16,7 @@ import { cn } from "@/lib/utils";
 
 import { PsButton, PsCard } from "./ui";
 
-interface RegisterFormProps {
-  readonly planOptions: readonly {
-    readonly code: string;
-    readonly name: string;
-  }[];
-  readonly defaultPlanCode: string;
-}
-
-export function RegisterForm({
-  planOptions,
-  defaultPlanCode,
-}: RegisterFormProps) {
+export function RegisterForm() {
   const [formError, setFormError] = useState<string | null>(null);
   const [code, setCode] = useState<string | null>(null);
 
@@ -45,7 +34,6 @@ export function RegisterForm({
       ownerPhone: "",
       industry: REGISTRATION_INDUSTRIES[0],
       region: REGISTRATION_REGIONS[0],
-      requestedPlanCode: defaultPlanCode,
     },
     mode: "onBlur",
   });
@@ -193,28 +181,6 @@ export function RegisterForm({
             </select>
           </Field>
         </div>
-
-        {planOptions.length > 0 ? (
-          <Field
-            id="requestedPlanCode"
-            label="Plan you're interested in"
-            hint="You can change this before your workspace goes live."
-            error={errors.requestedPlanCode?.message}
-          >
-            <select
-              id="requestedPlanCode"
-              className={inputClass(false)}
-              {...register("requestedPlanCode")}
-            >
-              <option value="">Not sure yet</option>
-              {planOptions.map((plan) => (
-                <option key={plan.code} value={plan.code}>
-                  {plan.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        ) : null}
 
         {formError ? (
           <p className="text-destructive text-sm" role="alert">

@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { CircleCheck } from "lucide-react";
 
 import { RegisterForm } from "@/features/public-site/components/register-form";
-import { repositories } from "@/server/repositories";
 
 export const metadata: Metadata = {
   title: "Start free",
@@ -14,24 +13,10 @@ const ASSURANCES = [
   "No credit card required to apply.",
   "Your WhatsApp number stays yours — we connect to it, we don't replace it.",
   "A reviewer checks every workspace before it goes live.",
+  "Your plan and workspace address are assigned on approval.",
 ] as const;
 
-export default async function RegisterPage({
-  searchParams,
-}: PageProps<"/register">) {
-  const params = await searchParams;
-  const requested = typeof params.plan === "string" ? params.plan : "";
-
-  const plans = (await repositories.plans.findAll())
-    .filter((item) => item.plan.isActive)
-    .map((item) => ({ code: item.plan.code, name: item.plan.name }));
-
-  // A ?plan= that no longer exists falls back to "not sure yet" rather than
-  // preselecting something the applicant never chose.
-  const defaultPlanCode = plans.some((plan) => plan.code === requested)
-    ? requested
-    : "";
-
+export default function RegisterPage() {
   return (
     <section className="section-ps">
       <div className="container-ps grid items-start gap-12 lg:grid-cols-[1fr_minmax(0,32rem)]">
@@ -57,7 +42,7 @@ export default async function RegisterPage({
           </ul>
         </div>
 
-        <RegisterForm planOptions={plans} defaultPlanCode={defaultPlanCode} />
+        <RegisterForm />
       </div>
     </section>
   );

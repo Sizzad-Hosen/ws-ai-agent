@@ -40,18 +40,6 @@ export async function registerAction(input: unknown): Promise<RegisterResult> {
   const values = parsed.data;
   const ownerEmail = values.ownerEmail.trim().toLowerCase();
 
-  let requestedPlanId: string | null = null;
-
-  if (values.requestedPlanCode !== "") {
-    const plan = await repositories.plans.findByCode(values.requestedPlanCode);
-
-    // An unknown or retired plan is not a reason to lose the application; the
-    // reviewer assigns one instead.
-    if (plan?.isActive === true) {
-      requestedPlanId = plan.id;
-    }
-  }
-
   try {
     if (await repositories.registrations.existsForEmail(ownerEmail)) {
       return {
@@ -69,7 +57,8 @@ export async function registerAction(input: unknown): Promise<RegisterResult> {
       ownerPhone: values.ownerPhone,
       industry: values.industry,
       region: values.region,
-      requestedPlanId,
+      // The applicant does not choose a plan; approval assigns one.
+      requestedPlanId: null,
     });
 
     // The back-office queue counts pending registrations in its navigation.

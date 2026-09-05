@@ -5,6 +5,7 @@ import type { AdminRepository } from "./contracts/admin-repository";
 import type { AiConfigurationRepository } from "./contracts/ai-configuration-repository";
 import type { MessageRepository } from "./contracts/message-repository";
 import type { PlanRepository } from "./contracts/plan-repository";
+import type { ProvisioningRepository } from "./contracts/provisioning-repository";
 import type { RegistrationRepository } from "./contracts/registration-repository";
 import type { SessionRepository } from "./contracts/session-repository";
 import type { SiteSettingsRepository } from "./contracts/site-settings-repository";
@@ -15,6 +16,7 @@ import type { WhatsappRepository } from "./contracts/whatsapp-repository";
 import { PrismaAdminRepository } from "./prisma/prisma-admin-repository";
 import { PrismaAiConfigurationRepository } from "./prisma/prisma-ai-configuration-repository";
 import { PrismaPlanRepository } from "./prisma/prisma-plan-repository";
+import { PrismaProvisioningRepository } from "./prisma/prisma-provisioning-repository";
 import { PrismaRegistrationRepository } from "./prisma/prisma-registration-repository";
 import { PrismaSessionRepository } from "./prisma/prisma-session-repository";
 import { PrismaSiteSettingsRepository } from "./prisma/prisma-site-settings-repository";
@@ -32,6 +34,7 @@ export interface Repositories {
   readonly admins: AdminRepository;
   readonly aiConfiguration: AiConfigurationRepository;
   readonly plans: PlanRepository;
+  readonly provisioning: ProvisioningRepository;
   readonly registrations: RegistrationRepository;
   readonly sessions: SessionRepository;
   readonly siteSettings: SiteSettingsRepository;
@@ -58,6 +61,7 @@ export const repositories: Repositories = {
   admins: new PrismaAdminRepository(),
   aiConfiguration: new PrismaAiConfigurationRepository(),
   plans: new PrismaPlanRepository(),
+  provisioning: new PrismaProvisioningRepository(),
   registrations: new PrismaRegistrationRepository(),
   sessions: new PrismaSessionRepository(),
   siteSettings: new PrismaSiteSettingsRepository(),

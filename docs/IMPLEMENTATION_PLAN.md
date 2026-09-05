@@ -368,12 +368,55 @@ a separate piece of work.
 
 Each restores the state it touches.
 
+### Provisioning on approval
+
+Signup no longer asks which plan the applicant wants. Choosing a tier before
+anyone has verified the business is a decision made at the wrong moment, and the
+value was advisory anyway — a reviewer could override it. Everything is now
+assigned when a registration is approved on screen 03, in one transaction:
+
+| Assigned | How |
+|---|---|
+| `tenants.id` | UUID |
+| `tenants.tenant_code` | next `TEN-#####` |
+| `tenants.subdomain` | derived from the business name, suffixed on collision |
+| `tenants.website_url` | `https://{subdomain}.{TENANT_ROOT_DOMAIN}`, null if unset |
+| `tenant_databases` | row with derived name and connection *references*, `PENDING` |
+| `subscriptions` | first priced active plan, `TRIALING`, price frozen at signup |
+| registration status | `APPROVED` |
+
+Decisions worth recording:
+
+- **The tenant starts on TRIAL, not ACTIVE, and its database row is PENDING.**
+  Nothing here creates a real database — that is an infrastructure job. Marking
+  a workspace active when it has nowhere to store anything would be a claim the
+  rest of the console then repeats.
+- **All of it commits together or not at all.** A tenant without a database row
+  or without a subscription is not half-provisioned, it is broken.
+- **Approve is re-checked inside the transaction**, so two reviewers clicking at
+  once cannot both provision the same registration. The owner's email is also
+  checked, since `tenants` carries no `registration_id` (§2.5 / D-02).
+- **Only priced, active plans are eligible.** `subscriptions.price_snapshot` is
+  NOT NULL as drawn, so a negotiated "Custom" plan cannot be subscribed at all
+  (§2.7 / D-04). Approval fails with an explanation rather than a constraint
+  error.
+- **A name yielding no usable DNS label is refused** rather than given an
+  invented address its owner would not recognise.
+- The checklist gate is enforced in the action, not only by disabling the
+  button.
+
 ### Still open
 
 `/register` is **anonymous and writes a row**, with no rate limiting. It needs
 an IP or captcha gate before the site is publicly reachable. This sits with the
-audit-log gap (§2.3): neither is a blocker for development, both are for
-production.
+audit-log gap (§2.3) — approving a tenant now creates a tenant, a database
+record and a subscription, and still leaves no record of who did it. Neither is
+a blocker for development; both are for production.
+
+Nothing provisions an actual tenant database. `tenant_databases` records the
+intent, with a secret reference no secret manager can resolve; an external
+provisioner must create the database and flip the row to `READY` before the
+tenant is servable.
 
 ---
 

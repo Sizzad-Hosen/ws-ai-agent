@@ -1,23 +1,14 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import {
-  Ban,
-  CircleCheck,
-  EllipsisVertical,
-  Globe,
-  Hash,
-  MessageSquare,
-  Store,
-  Tag,
-} from "lucide-react";
+import { Globe, Hash, MessageSquare, Store, Tag } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, Field } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { PLATFORM_PERMISSIONS } from "@/constants/permissions";
 import { ROUTES } from "@/constants/routes";
+import { RegistrationDecision } from "@/features/registrations/components/registration-decision";
 import { ReviewChecklist } from "@/features/registrations/components/review-checklist";
 import { allChecksPassed } from "@/features/registrations/types";
 import { hasPermission, requirePermission } from "@/server/auth/authorization";
@@ -77,27 +68,12 @@ export default async function RegistrationReviewPage({
           </span>
         }
         actions={
-          canManage ? (
-            <>
-              <Button variant="danger">
-                <Ban className="size-4" aria-hidden="true" />
-                Reject
-              </Button>
-              <Button
-                disabled={!readyToApprove}
-                title={
-                  readyToApprove
-                    ? undefined
-                    : "All checks must pass before final approval."
-                }
-              >
-                <CircleCheck className="size-4" aria-hidden="true" />
-                Approve Tenant
-              </Button>
-              <Button variant="secondary" size="icon" aria-label="More actions">
-                <EllipsisVertical className="size-4" aria-hidden="true" />
-              </Button>
-            </>
+          canManage && registration.status === "pending_review" ? (
+            <RegistrationDecision
+              registrationId={registration.id}
+              businessName={registration.businessName}
+              readyToApprove={readyToApprove}
+            />
           ) : null
         }
       />

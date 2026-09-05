@@ -39,8 +39,6 @@ export const registrationFormSchema = z.object({
     .trim()
     .min(2, "Choose your primary region.")
     .max(80, "Region must be 80 characters or fewer."),
-  /** Empty means "undecided"; the reviewer assigns a plan later. */
-  requestedPlanCode: z.string().trim().max(100),
 });
 
 export type RegistrationFormValues = z.infer<typeof registrationFormSchema>;
