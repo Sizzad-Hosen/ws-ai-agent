@@ -202,9 +202,54 @@ ERD rather than worked around:
 - **Screen 09 shows no key fingerprint.** `secret_reference` is a pointer into
   a secret manager and is never selected into a DTO, so there is nothing to
   fingerprint. This is the correct outcome for S-01.
-- **Screen 02's Messages / Orders / WhatsApp / AI columns read "—"**, and
-  screen 04's WhatsApp and AI panels report unavailable. Those rollups are
-  §2.2, still open.
+- **Screens 08/10, 11 and 12 show an explicit "no data source" panel**, and
+  screen 01's GMV, AI-messages, WA-messages, orders and resolution-rate tiles
+  render as unavailable. Those sources are §2.2, still open.
+
+### 2.11 Product changes made after the mockups
+
+The following were requested directly and diverge from `docs/uiux/bo-site/`.
+The mockups are out of date on these points.
+
+| Change | Effect |
+|---|---|
+| **All fixture data removed** | `src/server/data/mock/` and `src/server/repositories/mock/` are deleted. Nothing in the application fabricates data. The four ports with no tables are served by `src/server/repositories/unavailable/`, which reports *absence* — never zero — so a screen can say "there is no source for this" instead of "there is no activity". |
+| **Plan resource limits removed entirely** | `PlanFeatures.limits` is gone, along with the AI Messages / WhatsApp Numbers / Team Members / Storage rows on screen 05 and the whole "Resource Limits" card on screens 06–07. Plans now describe price and capability only. Screen 08/10's "Usage vs Plan Limit" column went with it, since there is no allowance left to compare against. |
+| **Tenants list columns trimmed** | AI Status, Messages, Orders and MRR removed from screen 02. Remaining columns: Business / ID, Owner, Plan, WhatsApp, Status, Actions. |
+| **Tenants list gained row actions** | Collapsed into a single kebab (three-dot) menu per row: View details, View public site, then status-driven lifecycle items — Approve and Reject when pending review, Suspend when active or trialing, Reactivate when suspended. Transitions are enforced server-side in `decideTenantStatusAction`, not merely by hiding menu items. |
+| **`tenants.website_url` added** | Not in the ERD. Nullable `varchar(300)`, migration `20260905090000_add_tenant_website_url`. Backs the "View public site" item, which is disabled with "No site URL on file" when null rather than guessing a URL from the tenant code. |
+| **Plan writes wired to Postgres** | `savePlanAction` now persists; `deletePlanAction` added. Delete is refused while a plan has active subscribers, and the `ON DELETE RESTRICT` on `subscriptions.plan_id` / `tenant_registrations.requested_plan_id` is caught and explained rather than surfacing as a foreign-key error. Deactivating remains the way to retire a plan with history. |
+| **AI configuration writes wired** | `platform_ai_configurations` is now editable: provider, model, active flag, global token limit, per-tenant default and warning threshold. The **credential is deliberately not editable** — `secret_reference` holds a secret-manager pointer, not a key, and no secret manager is configured (S-01 / D-24). Provider/model pairing is validated server-side. |
+| **System Settings made editable** | Backed by `public_site_settings` (brand, contact, announcement), with a versioned jsonb contract in `src/features/system/site-settings.ts` mirroring the `plans.features` approach (D-05). Each key degrades to defaults independently. Maintenance mode and feature flags remain unavailable — no table (§2.1 / D-32). |
+| **REST API routes added** | Server Actions remain the UI's path; REST handlers under `src/app/api/` expose the same operations for external callers. Lifecycle and delete rules are shared modules, not duplicated, so the two entry points cannot drift. |
+
+These lifecycle mutations are **not yet audited** — `platform_audit_logs` is not
+in the ERD (§2.3). Approving, rejecting or suspending a tenant, changing a
+price, editing the global token limit or changing the public support address all
+currently leave no record of who did it. That should be closed before this
+reaches a real environment.
+
+### 2.11a Local database
+
+`DATABASE_URL` points at a normal PostgreSQL instance
+(`localhost:5432/ws_agent_masterdb`). Migrations, seeding and the shadow
+database Prisma needs for `migrate dev` all work there.
+
+Avoid `npm run db:local`. It starts Prisma's bundled wasm Postgres, which
+serves a **single database and ignores the database name in the connection
+string** (`current_database()` does not match what was requested). Two things
+follow: `prisma migrate dev` cannot work, because its shadow database is created
+with `CREATE DATABASE` — which clones the one live database and collides on
+existing types; and the application's tables end up in `template1`, so every
+database subsequently created on that server inherits them. Use the real
+Postgres instead.
+
+Verification scripts, both of which restore the state they touch:
+
+- `npm run verify:auth` — credential rejection, sign-in, session persistence.
+- `npm run verify:writes` — plan create/update/delete (money precision, currency
+  normalisation, `code` immutability), AI configuration persistence including
+  the tenant-allocation clear, site settings, and tenant lifecycle transitions.
 
 ---
 
@@ -923,8 +968,10 @@ screens render; `lint`, `typecheck`, `build` and `format:check` pass.
    subscribed to a negotiated "Custom" plan.
 5. **D-09** — confirm the occluded `invoices` column is `paid_at`.
 6. **§2.3 / D-12 / D-13** — audit log, impersonation grants, admin MFA. Every
-   privileged action in the console is currently unaudited.
+   privileged action in the console is currently unaudited, including the
+   tenant approve / reject / suspend actions now wired up on screen 02.
 
-Writes remain read-only-safe: `savePlanAction` validates, enforces the
-uniqueness and deactivation guards, and stops short of persisting, because
-mutations belong with the audit trail in §2.3.
+Plan writes remain deliberately unpersisted: `savePlanAction` validates and
+enforces the uniqueness and deactivation guards, then stops, because catalogue
+edits change what every subscriber is entitled to and belong with the audit
+trail in §2.3.

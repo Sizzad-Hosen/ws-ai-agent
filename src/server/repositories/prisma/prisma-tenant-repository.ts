@@ -133,10 +133,9 @@ export class PrismaTenantRepository implements TenantRepository {
         tenant: mapTenant(tenant),
         planName: subscription ? subscription.plan.name : null,
         metrics: {
-          // WhatsApp and AI status come from sources that do not exist yet
-          // (§2.2). Null renders as "—" rather than a default, so "no data"
-          // never reads as "not connected".
-          aiOnline: null,
+          // WhatsApp connection state comes from a registry that does not
+          // exist yet (§2.2). Null renders as "—" rather than a default, so
+          // "no data" never reads as "not connected".
           whatsappStatus: null,
         },
       };

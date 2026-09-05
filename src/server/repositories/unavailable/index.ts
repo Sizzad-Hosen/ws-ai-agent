@@ -1,12 +1,12 @@
 import type { ActivityEntry } from "@/features/dashboard/types";
 import type { MessageFeed } from "@/features/messages/types";
-import type { UsageSummary, UsageTimeframe } from "@/features/usage/types";
-import type { WhatsappAccount, WhatsappSummary } from "@/features/whatsapp/types";
-import type { ActivityRepository } from "@/server/repositories/contracts/activity-repository";
+import type { UsageSummary } from "@/features/usage/types";
 import type {
-  MessageListQuery,
-  MessageRepository,
-} from "@/server/repositories/contracts/message-repository";
+  WhatsappAccount,
+  WhatsappSummary,
+} from "@/features/whatsapp/types";
+import type { ActivityRepository } from "@/server/repositories/contracts/activity-repository";
+import type { MessageRepository } from "@/server/repositories/contracts/message-repository";
 import type { UsageRepository } from "@/server/repositories/contracts/usage-repository";
 import type {
   WhatsappListQuery,
@@ -49,14 +49,8 @@ export class UnavailableWhatsappRepository implements WhatsappRepository {
 }
 
 export class UnavailableMessageRepository implements MessageRepository {
-  async findMany(query: MessageListQuery = {}): Promise<MessageFeed> {
-    return {
-      items: [],
-      total: 0,
-      failedCount: 0,
-      limit: query.limit ?? 20,
-      offset: query.offset ?? 0,
-    };
+  async findMany(): Promise<MessageFeed | null> {
+    return null;
   }
 
   async listTenantOptions(): Promise<readonly { id: string; name: string }[]> {
@@ -65,7 +59,7 @@ export class UnavailableMessageRepository implements MessageRepository {
 }
 
 export class UnavailableUsageRepository implements UsageRepository {
-  async summary(_timeframe: UsageTimeframe): Promise<UsageSummary | null> {
+  async summary(): Promise<UsageSummary | null> {
     return null;
   }
 

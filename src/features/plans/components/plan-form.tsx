@@ -240,7 +240,6 @@ export function PlanForm({
               </fieldset>
             </CardBody>
           </Card>
-
         </div>
 
         <div className="space-y-4">

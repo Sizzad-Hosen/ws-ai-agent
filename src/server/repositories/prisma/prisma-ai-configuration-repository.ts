@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 
+import type { AiConfigurationSettings } from "@/features/ai-settings/schemas";
 import type { AiConfigurationView } from "@/features/ai-settings/types";
 import { prisma } from "@/server/db/prisma";
 import type { AiConfigurationRepository } from "@/server/repositories/contracts/ai-configuration-repository";
@@ -86,5 +87,27 @@ export class PrismaAiConfigurationRepository implements AiConfigurationRepositor
       currentTokenUsage: null,
       usageAsOf: null,
     };
+  }
+
+  async save(values: AiConfigurationSettings): Promise<void> {
+    const existing = await prisma.platformAiConfiguration.findFirst({
+      orderBy: { updatedAt: Prisma.SortOrder.desc },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      // No row yet. `secret_reference` is NOT NULL but the credential belongs
+      // in a secret manager that is not wired up, so an empty pointer is
+      // written and the key remains unset (S-01 / D-24).
+      await prisma.platformAiConfiguration.create({
+        data: { ...values, secretReference: "" },
+      });
+      return;
+    }
+
+    await prisma.platformAiConfiguration.update({
+      where: { id: existing.id },
+      data: values,
+    });
   }
 }

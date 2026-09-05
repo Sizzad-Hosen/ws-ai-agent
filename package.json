@@ -7,7 +7,7 @@
     "dev:ready": "npm run db:local && npm run dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint src scripts prisma/seed.ts eslint.config.mjs next.config.ts --max-warnings=0",
+    "lint": "eslint src scripts prisma/seed.ts prisma/seed eslint.config.mjs next.config.ts --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -17,7 +17,8 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
-    "verify:auth": "node --conditions=react-server --import tsx scripts/verify-auth.ts"
+    "verify:auth": "node --conditions=react-server --import tsx scripts/verify-auth.ts",
+    "verify:writes": "node --conditions=react-server --import tsx scripts/verify-writes.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

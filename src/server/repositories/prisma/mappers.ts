@@ -186,6 +186,7 @@ export function mapTenant(tenant: PrismaTenant): Tenant {
     ownerPhone: tenant.ownerPhone,
     industry: tenant.industry,
     region: tenant.region,
+    websiteUrl: tenant.websiteUrl,
     approvalStatus: tenantApprovalMap[tenant.approvalStatus],
     createdAt: tenant.createdAt.toISOString(),
     // The ERD has no tenants → tenant_registrations relationship, so the

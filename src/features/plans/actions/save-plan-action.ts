@@ -1,13 +1,12 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+
 import { PLATFORM_PERMISSIONS } from "@/constants/permissions";
-import {
-  derivePlanCode,
-  planFormSchema,
-  toPlanValues,
-} from "@/features/plans/schemas";
+import { ROUTES } from "@/constants/routes";
+import { savePlan } from "@/features/plans/lifecycle";
+import { planFormSchema } from "@/features/plans/schemas";
 import { requirePermission } from "@/server/auth/authorization";
-import { repositories } from "@/server/repositories";
 
 export interface PlanActionResult {
   readonly success: boolean;
@@ -16,12 +15,10 @@ export interface PlanActionResult {
 }
 
 /**
- * Validates a plan submission and enforces the catalogue's business rules.
+ * Creates or updates a plan.
  *
- * Persistence is deliberately not wired: `plans` in its ERD shape does not
- * exist in the database yet, and the schema reconciliation (M0) is awaiting
- * approval — see docs/IMPLEMENTATION_PLAN.md §2.1. Everything up to the write
- * runs for real, so wiring the repository call is the only remaining step.
+ * The catalogue rules live in `@/features/plans/lifecycle`, which the REST
+ * route shares, so the two entry points cannot disagree.
  */
 export async function savePlanAction(
   planId: string | null,
@@ -39,43 +36,18 @@ export async function savePlanAction(
     };
   }
 
-  const values = parsed.data;
-  const existing = await repositories.plans.findAll();
-  const current = existing.find((item) => item.plan.id === planId);
+  const result = await savePlan(planId, parsed.data);
 
-  // Normalised here so the write path is exercised end to end.
-  void toPlanValues(values, current?.plan.features.toggles ?? []);
-
-  // `code` is immutable after creation, so uniqueness is only checked on create.
-  if (planId === null) {
-    const code = derivePlanCode(values.name);
-    const clash = existing.find((item) => item.plan.code === code);
-
-    if (clash) {
-      return {
-        success: false,
-        message: "A plan with this name already exists.",
-        fieldErrors: { name: ["Choose a name that is not already in use."] },
-      };
-    }
+  if (result.outcome !== "saved") {
+    return {
+      success: false,
+      message: result.message,
+      fieldErrors: result.fieldErrors,
+    };
   }
 
-  // Deactivating a plan that still has subscribers would silently strip their
-  // entitlements, so it is blocked here rather than in the UI alone (D-19).
-  if (planId !== null && !values.isActive) {
-    if (current && current.activeSubscriptions > 0) {
-      return {
-        success: false,
-        message: `This plan still has ${current.activeSubscriptions} active subscriber${
-          current.activeSubscriptions === 1 ? "" : "s"
-        }. Move them to another plan before hiding it.`,
-      };
-    }
-  }
+  revalidatePath(ROUTES.bo.plans);
+  if (planId !== null) revalidatePath(ROUTES.bo.planEdit(planId));
 
-  return {
-    success: false,
-    message:
-      "Validation passed. Saving is blocked until the master-schema migration (M0) is approved — see docs/IMPLEMENTATION_PLAN.md §2.1.",
-  };
+  return { success: true, message: result.message };
 }

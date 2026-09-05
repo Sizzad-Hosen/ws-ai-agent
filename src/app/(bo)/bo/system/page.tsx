@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
-import { CircleQuestionMark, Server, ShieldCheck } from "lucide-react";
+import { Server, ShieldCheck } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
-import { Card, CardBody, CardHeader, Field } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PLATFORM_PERMISSIONS } from "@/constants/permissions";
+import { Card, CardBody, CardHeader, Field } from "@/components/ui/card";
 import { APP_CONFIG } from "@/config/app";
-import { requirePermission } from "@/server/auth/authorization";
+import { PLATFORM_PERMISSIONS } from "@/constants/permissions";
+import { SiteSettingsForm } from "@/features/system/components/site-settings-form";
+import { hasPermission, requirePermission } from "@/server/auth/authorization";
+import { repositories } from "@/server/repositories";
 
 export const metadata: Metadata = {
   title: "System Settings",
@@ -14,6 +16,11 @@ export const metadata: Metadata = {
 
 export default async function SystemSettingsPage() {
   const admin = await requirePermission(PLATFORM_PERMISSIONS.SETTINGS_MANAGE);
+  const settings = await repositories.siteSettings.find();
+  const canManage = hasPermission(
+    admin.role,
+    PLATFORM_PERMISSIONS.SETTINGS_MANAGE,
+  );
 
   return (
     <div className="space-y-6">
@@ -47,33 +54,23 @@ export default async function SystemSettingsPage() {
             title="Platform configuration"
             icon={<Server className="size-4" aria-hidden="true" />}
           />
-          <CardBody className="space-y-3">
-            <p className="text-muted-foreground text-sm">
-              Maintenance mode, support contact and feature flags live in the
-              master schema. No mockup defines this screen, and the backing
-              tables are not part of the ERD in <code>docs/db</code>, so nothing
-              is editable here yet.
-            </p>
-            <p className="text-muted-foreground text-sm">
-              See §2.1 and D-32 in{" "}
-              <code className="tabular">docs/IMPLEMENTATION_PLAN.md</code>.
-            </p>
-          </CardBody>
-        </Card>
-
-        <Card id="support" className="lg:col-span-2">
-          <CardHeader
-            title="Support"
-            icon={<CircleQuestionMark className="size-4" aria-hidden="true" />}
-          />
           <CardBody>
+            {/*
+              Maintenance mode and feature flags have no table in the ERD, so
+              only the public-site settings below are editable — see §2.1 / D-32.
+            */}
             <p className="text-muted-foreground text-sm">
-              Escalation routing and the support contact address are part of the
-              platform configuration described above.
+              Maintenance mode and feature flags have no backing table in the
+              master schema yet, so they cannot be set here. The public site
+              settings below are stored in{" "}
+              <code className="tabular">public_site_settings</code> and take
+              effect immediately.
             </p>
           </CardBody>
         </Card>
       </div>
+
+      <SiteSettingsForm defaultValues={settings} canManage={canManage} />
     </div>
   );
 }

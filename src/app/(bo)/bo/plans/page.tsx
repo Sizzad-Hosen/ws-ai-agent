@@ -33,7 +33,7 @@ export default async function PlansPage() {
           { label: "Plan Management" },
         ]}
         title="Plan Management"
-        description="Configure pricing tiers, resource limits, and feature availability."
+        description="Configure pricing tiers and feature availability."
         actions={
           canManage ? (
             <Link

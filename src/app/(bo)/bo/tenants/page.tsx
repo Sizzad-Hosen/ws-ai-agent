@@ -9,7 +9,7 @@ import { PLATFORM_PERMISSIONS } from "@/constants/permissions";
 import { ROUTES } from "@/constants/routes";
 import { TenantFilters } from "@/features/tenants/components/tenant-filters";
 import { TenantsTable } from "@/features/tenants/components/tenants-table";
-import { requirePermission } from "@/server/auth/authorization";
+import { hasPermission, requirePermission } from "@/server/auth/authorization";
 import { repositories } from "@/server/repositories";
 import {
   TENANT_APPROVAL_STATUSES,
@@ -36,7 +36,11 @@ function clampOffset(value: string): number {
 export default async function TenantsPage({
   searchParams,
 }: PageProps<"/bo/tenants">) {
-  await requirePermission(PLATFORM_PERMISSIONS.TENANTS_READ);
+  const admin = await requirePermission(PLATFORM_PERMISSIONS.TENANTS_READ);
+  const canManage = hasPermission(
+    admin.role,
+    PLATFORM_PERMISSIONS.TENANTS_MANAGE,
+  );
 
   const params = await searchParams;
   const search = single(params.search).slice(0, 100);
@@ -110,7 +114,11 @@ export default async function TenantsPage({
           plans={plans.map((item) => item.plan)}
           hasFilters={hasFilters}
         />
-        <TenantsTable items={result.items} hasFilters={hasFilters} />
+        <TenantsTable
+          items={result.items}
+          hasFilters={hasFilters}
+          canManage={canManage}
+        />
         <Pagination
           total={result.total}
           limit={result.limit}

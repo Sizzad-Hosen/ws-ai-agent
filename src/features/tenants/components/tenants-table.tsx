@@ -21,17 +21,23 @@ import {
   TENANT_STATUS_TONES,
   WHATSAPP_STATUS_LABELS,
 } from "@/features/tenants/status";
-import { formatMoney, formatNumber } from "@/utils/format";
 import type { WhatsappConnectionStatus } from "@/types/status";
 
-const COLUMN_COUNT = 10;
+import { TenantRowActions } from "./tenant-row-actions";
+
+const COLUMN_COUNT = 7;
 
 interface TenantsTableProps {
   readonly items: readonly TenantListItem[];
   readonly hasFilters: boolean;
+  readonly canManage: boolean;
 }
 
-export function TenantsTable({ items, hasFilters }: TenantsTableProps) {
+export function TenantsTable({
+  items,
+  hasFilters,
+  canManage,
+}: TenantsTableProps) {
   return (
     <TableScroller>
       <Table>
@@ -44,11 +50,8 @@ export function TenantsTable({ items, hasFilters }: TenantsTableProps) {
             <TH>Owner</TH>
             <TH>Plan</TH>
             <TH>WhatsApp</TH>
-            <TH>AI Status</TH>
-            <TH numeric>Messages</TH>
-            <TH numeric>Orders</TH>
-            <TH numeric>MRR</TH>
             <TH>Status</TH>
+            <TH className="text-right">Actions</TH>
           </TR>
         </THead>
         <TBody>
@@ -102,23 +105,18 @@ export function TenantsTable({ items, hasFilters }: TenantsTableProps) {
                   <WhatsappIcon status={metrics.whatsappStatus} />
                 </TD>
                 <TD>
-                  <AiStatus online={metrics.aiOnline} />
-                </TD>
-                <TD numeric>
-                  {metrics.messages === null
-                    ? "—"
-                    : formatNumber(metrics.messages)}
-                </TD>
-                <TD numeric>
-                  {metrics.orders === null ? "—" : formatNumber(metrics.orders)}
-                </TD>
-                <TD numeric>
-                  {formatMoney(metrics.mrr, metrics.currency) ?? "—"}
-                </TD>
-                <TD>
                   <Badge tone={TENANT_STATUS_TONES[tenant.approvalStatus]}>
                     {TENANT_STATUS_LABELS[tenant.approvalStatus]}
                   </Badge>
+                </TD>
+                <TD className="text-right">
+                  <TenantRowActions
+                    tenantId={tenant.id}
+                    businessName={tenant.businessName}
+                    status={tenant.approvalStatus}
+                    websiteUrl={tenant.websiteUrl}
+                    canManage={canManage}
+                  />
                 </TD>
               </TR>
             ))
@@ -153,25 +151,5 @@ function WhatsappIcon({
       className="text-muted-foreground size-5"
       aria-label={label}
     />
-  );
-}
-
-function AiStatus({ online }: { readonly online: boolean | null }) {
-  if (online === null) {
-    return <span className="text-muted-foreground">—</span>;
-  }
-
-  return (
-    <span className="inline-flex items-center gap-2 text-[13px]">
-      <span
-        className={
-          online
-            ? "bg-success size-1.5 rounded-full"
-            : "bg-muted-foreground size-1.5 rounded-full"
-        }
-        aria-hidden="true"
-      />
-      <span className="tabular">{online ? "Active" : "Paused"}</span>
-    </span>
   );
 }

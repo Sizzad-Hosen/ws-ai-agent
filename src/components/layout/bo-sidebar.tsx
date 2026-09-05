@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CircleQuestionMark, Plus, Settings } from "lucide-react";
+import { CircleQuestionMark, Settings } from "lucide-react";
 
 import { APP_CONFIG } from "@/config/app";
 import { BO_NAVIGATION, type NavigationItem } from "@/config/bo-navigation";
@@ -43,16 +43,6 @@ export function BoSidebar({ allowedHrefs }: BoSidebarProps) {
             {APP_CONFIG.consoleName}
           </span>
         </span>
-      </div>
-
-      <div className="px-4 py-4">
-        <Link
-          href={`${ROUTES.bo.tenants}?new=1`}
-          className="bg-primary-deep hover:bg-primary inline-flex h-10 w-full items-center justify-center gap-2 rounded-md text-sm font-medium text-white transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          <Plus className="size-4" aria-hidden="true" />
-          New Tenant
-        </Link>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2" aria-label="Back office">

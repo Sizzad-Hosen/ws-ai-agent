@@ -24,5 +24,11 @@ export const ROUTES = {
   },
   api: {
     health: "/api/health",
+    aiConfig: "/api/ai-config",
+    plans: "/api/plans",
+    plan: (id: string) => `/api/plans/${id}`,
+    tenants: "/api/tenants",
+    tenant: (id: string) => `/api/tenants/${id}`,
+    tenantStatus: (id: string) => `/api/tenants/${id}/status`,
   },
 } as const;

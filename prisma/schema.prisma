@@ -264,6 +264,9 @@ model Tenant {
   ownerPhone     String               @map("owner_phone") @db.VarChar(30)
   industry       String?              @db.VarChar(100)
   region         String?              @db.VarChar(80)
+  /// Public storefront URL. Not in the ERD: added so the tenants list can link
+  /// out to a tenant's own site. Null until a site exists.
+  websiteUrl     String?              @map("website_url") @db.VarChar(300)
   approvalStatus TenantApprovalStatus @default(PENDING_REVIEW) @map("approval_status")
   createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
 

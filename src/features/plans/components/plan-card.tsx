@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { ROUTES } from "@/constants/routes";
+import { PlanDeleteButton } from "@/features/plans/components/plan-delete-button";
 import type { PlanListItem } from "@/features/plans/types";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/utils/format";
@@ -130,6 +131,13 @@ export function PlanCard({ item, canManage }: PlanCardProps) {
           >
             Edit Plan
           </Link>
+        ) : null}
+        {canManage ? (
+          <PlanDeleteButton
+            planId={plan.id}
+            planName={plan.name}
+            activeSubscriptions={activeSubscriptions}
+          />
         ) : null}
         <p className="text-muted-foreground text-center text-xs">
           {activeSubscriptions === 0

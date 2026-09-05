@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ArrowDown, ArrowUp, ListFilter } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
+import { UnavailableNotice } from "@/components/shared/unavailable-notice";
 import { QuerySelect } from "@/components/shared/query-select";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -117,6 +118,27 @@ export default async function MessagesPage({
       ? `${ROUTES.bo.messages}?${serialized}`
       : ROUTES.bo.messages;
   })();
+
+  if (feed === null) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Message Monitoring"
+          description="Real-time log of AI and system communications."
+          actions={
+            <Button variant="secondary" disabled>
+              Export Logs
+            </Button>
+          }
+        />
+        <UnavailableNotice
+          title="No message store configured"
+          description="The cross-tenant message log has no home in the master schema, and at the documented volume it should not live in the master OLTP database. Until that store is chosen there is nothing to read — which is not the same as no traffic."
+          reference="§2.2 / D-11"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

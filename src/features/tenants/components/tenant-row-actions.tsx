@@ -7,39 +7,47 @@ import {
   CircleCheck,
   ExternalLink,
   Eye,
-  LoaderCircle,
+  PauseCircle,
+  PlayCircle,
 } from "lucide-react";
 import { useState, useTransition } from "react";
 
-import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { ROUTES } from "@/constants/routes";
-import { decideTenantApprovalAction } from "@/features/tenants/actions/tenant-approval-action";
+import {
+  decideTenantStatusAction,
+  type TenantDecision,
+} from "@/features/tenants/actions/tenant-status-action";
+import type { TenantApprovalStatus } from "@/types/status";
 
 interface TenantRowActionsProps {
   readonly tenantId: string;
   readonly businessName: string;
-  readonly awaitingReview: boolean;
+  readonly status: TenantApprovalStatus;
+  readonly websiteUrl: string | null;
   readonly canManage: boolean;
-  /** `null` when no tenant-site template is configured (D-35). */
-  readonly siteUrl: string | null;
 }
 
 export function TenantRowActions({
   tenantId,
   businessName,
-  awaitingReview,
+  status,
+  websiteUrl,
   canManage,
-  siteUrl,
 }: TenantRowActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function decide(decision: "approve" | "reject"): void {
+  function decide(decision: TenantDecision): void {
     setError(null);
 
     startTransition(async () => {
-      const result = await decideTenantApprovalAction({ tenantId, decision });
+      const result = await decideTenantStatusAction({ tenantId, decision });
 
       if (!result.success) {
         setError(result.message);
@@ -50,73 +58,85 @@ export function TenantRowActions({
     });
   }
 
+  const awaitingReview = status === "pending_review";
+  const canSuspend = status === "active" || status === "trial";
+  const canReactivate = status === "suspended";
+  const hasLifecycleAction =
+    canManage && (awaitingReview || canSuspend || canReactivate);
+
   return (
-    <div className="flex items-center justify-end gap-1.5">
+    <div className="flex items-center justify-end gap-2">
       {error ? (
-        <span className="text-destructive mr-1 text-xs" role="alert">
+        <span className="text-destructive max-w-56 text-xs" role="alert">
           {error}
         </span>
       ) : null}
 
-      <Button asChild variant="secondary" size="sm">
-        <Link href={ROUTES.bo.tenant(tenantId)}>
-          <Eye className="size-3.5" aria-hidden="true" />
-          View details
-        </Link>
-      </Button>
+      <DropdownMenu label={`Actions for ${businessName}`}>
+        <DropdownMenuItem asChild>
+          <Link href={ROUTES.bo.tenant(tenantId)}>
+            <Eye className="size-4 shrink-0" aria-hidden="true" />
+            View details
+          </Link>
+        </DropdownMenuItem>
 
-      {siteUrl ? (
-        <Button asChild variant="ghost" size="sm">
-          <a
-            href={siteUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-            aria-label={`Open the ${businessName} tenant site in a new tab`}
-          >
-            <ExternalLink className="size-3.5" aria-hidden="true" />
-            View site
-          </a>
-        </Button>
-      ) : (
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled
-          title="No tenant site URL is configured. Set TENANT_SITE_URL_TEMPLATE to enable this."
-        >
-          <ExternalLink className="size-3.5" aria-hidden="true" />
-          View site
-        </Button>
-      )}
+        {websiteUrl ? (
+          <DropdownMenuItem asChild>
+            <a href={websiteUrl} target="_blank" rel="noreferrer noopener">
+              <ExternalLink className="size-4 shrink-0" aria-hidden="true" />
+              View public site
+            </a>
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem disabled hint="No site URL on file">
+            <ExternalLink className="size-4 shrink-0" aria-hidden="true" />
+            View public site
+          </DropdownMenuItem>
+        )}
 
-      {awaitingReview && canManage ? (
-        <>
-          <Button
-            variant="primary"
-            size="sm"
+        {hasLifecycleAction ? <DropdownMenuSeparator /> : null}
+
+        {canManage && awaitingReview ? (
+          <>
+            <DropdownMenuItem
+              disabled={isPending}
+              onSelect={() => decide("approve")}
+            >
+              <CircleCheck className="size-4 shrink-0" aria-hidden="true" />
+              Approve
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              tone="danger"
+              disabled={isPending}
+              onSelect={() => decide("reject")}
+            >
+              <Ban className="size-4 shrink-0" aria-hidden="true" />
+              Reject
+            </DropdownMenuItem>
+          </>
+        ) : null}
+
+        {canManage && canSuspend ? (
+          <DropdownMenuItem
+            tone="danger"
             disabled={isPending}
-            onClick={() => decide("approve")}
-            aria-label={`Approve ${businessName}`}
+            onSelect={() => decide("suspend")}
           >
-            {isPending ? (
-              <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
-            ) : (
-              <CircleCheck className="size-3.5" aria-hidden="true" />
-            )}
-            Approve
-          </Button>
-          <Button
-            variant="danger"
-            size="sm"
+            <PauseCircle className="size-4 shrink-0" aria-hidden="true" />
+            Suspend
+          </DropdownMenuItem>
+        ) : null}
+
+        {canManage && canReactivate ? (
+          <DropdownMenuItem
             disabled={isPending}
-            onClick={() => decide("reject")}
-            aria-label={`Reject ${businessName}`}
+            onSelect={() => decide("reactivate")}
           >
-            <Ban className="size-3.5" aria-hidden="true" />
-            Reject
-          </Button>
-        </>
-      ) : null}
+            <PlayCircle className="size-4 shrink-0" aria-hidden="true" />
+            Reactivate
+          </DropdownMenuItem>
+        ) : null}
+      </DropdownMenu>
     </div>
   );
 }

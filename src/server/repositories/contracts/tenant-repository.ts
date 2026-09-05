@@ -15,8 +15,5 @@ export interface TenantRepository {
   findMany(query?: TenantListQuery): Promise<PaginatedResult<TenantListItem>>;
   count(): Promise<number>;
   countActive(): Promise<number>;
-  updateApprovalStatus(
-    id: string,
-    status: TenantApprovalStatus,
-  ): Promise<void>;
+  updateApprovalStatus(id: string, status: TenantApprovalStatus): Promise<void>;
 }

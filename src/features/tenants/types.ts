@@ -15,6 +15,8 @@ export interface Tenant {
   readonly ownerPhone: string;
   readonly industry: string | null;
   readonly region: string | null;
+  /** Public storefront URL. Null when the tenant has no site on file. */
+  readonly websiteUrl: string | null;
   readonly approvalStatus: TenantApprovalStatus;
   readonly createdAt: string;
   /** `tenants.registration_id` — proposed in 2.5 / D-02, shown on screen 04. */
@@ -58,13 +60,12 @@ export interface TenantInfrastructure {
 /**
  * Per-tenant status shown on screen 02.
  *
- * The Messages, Orders and MRR columns were removed from this screen at the
- * product owner's request; the mockup for screen 02 is out of date on that
- * point. What remains is operational status, which still has no source (§2.2)
- * and therefore stays nullable.
+ * The AI Status, Messages, Orders and MRR columns were removed from this screen
+ * at the product owner's request; the mockup for screen 02 is out of date on
+ * that point. WhatsApp connection state remains, and still has no source
+ * (§2.2), so it stays nullable.
  */
 export interface TenantMetrics {
-  readonly aiOnline: boolean | null;
   readonly whatsappStatus: WhatsappConnectionStatus | null;
 }
 
