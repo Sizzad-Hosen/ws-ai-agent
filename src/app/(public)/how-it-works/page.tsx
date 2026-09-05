@@ -142,7 +142,7 @@ export default function HowItWorksPage() {
               </p>
               <Link
                 href={ROUTES.public.demo}
-                className="text-ps-brand hover:text-ps-brand-deep mt-6 inline-flex items-center gap-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+                className="text-ps-brand-deep hover:text-ps-brand-deep/80 mt-6 inline-flex items-center gap-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 Learn More
                 <ArrowRight className="size-3.5" aria-hidden="true" />

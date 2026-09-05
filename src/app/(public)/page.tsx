@@ -59,7 +59,7 @@ export default function PublicHomePage() {
           <div className="max-w-xl">
             <h1 className="text-ps-ink font-display text-display-md lg:text-display-lg text-balance">
               Turn WhatsApp Conversations Into Sales&nbsp;—{" "}
-              <span className="text-ps-brand">Automatically</span>
+              <span className="text-ps-brand-deep">Automatically</span>
             </h1>
 
             <p className="text-ps-ink-muted text-lead mt-6 text-pretty">

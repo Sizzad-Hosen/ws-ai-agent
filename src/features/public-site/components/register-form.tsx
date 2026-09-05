@@ -34,6 +34,7 @@ export function RegisterForm() {
       ownerPhone: "",
       industry: REGISTRATION_INDUSTRIES[0],
       region: REGISTRATION_REGIONS[0],
+      companyWebsite: "",
     },
     mode: "onBlur",
   });
@@ -180,6 +181,23 @@ export function RegisterForm() {
               ))}
             </select>
           </Field>
+        </div>
+
+        {/*
+          Honeypot. Hidden from sight and from assistive technology, and
+          excluded from tab order, so only a bot filling every field reaches it.
+          `hidden` rather than off-screen positioning, since an off-screen input
+          is still announced by some screen readers.
+        */}
+        <div hidden aria-hidden="true">
+          <label htmlFor="companyWebsite">Company website</label>
+          <input
+            id="companyWebsite"
+            type="text"
+            tabIndex={-1}
+            autoComplete="off"
+            {...register("companyWebsite")}
+          />
         </div>
 
         {formError ? (

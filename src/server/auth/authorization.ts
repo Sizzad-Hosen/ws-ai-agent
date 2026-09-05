@@ -39,7 +39,10 @@ export async function requirePermission(
   const admin = await requireBoAdmin();
 
   if (!hasPermission(admin.role, permission)) {
-    redirect(`${ROUTES.bo.dashboard}?denied=${encodeURIComponent(permission)}`);
+    // The permission is deliberately not named in the URL. Nothing rendered it,
+    // and it would otherwise reach browser history, referrer headers and any
+    // log or analytics pipeline that sees the query string.
+    redirect(ROUTES.bo.dashboard);
   }
 
   return admin;

@@ -23,7 +23,7 @@ const psButtonVariants = cva(
         secondary:
           "border-ps-edge text-ps-ink hover:bg-ps-panel-soft border bg-transparent",
         /** Emerald text, no background — "Learn More" affordances. */
-        ghost: "text-ps-brand hover:text-ps-brand-deep px-0",
+        ghost: "text-ps-brand-deep hover:text-ps-brand-deep/80 px-0",
         onDark: "bg-white text-ps-ink hover:bg-white/90",
       },
       size: {
@@ -125,7 +125,7 @@ export function PsSectionHeading({
       )}
     >
       {eyebrow ? (
-        <span className="text-ps-brand font-display text-eyebrow uppercase">
+        <span className="text-ps-brand-deep font-display text-eyebrow uppercase">
           {eyebrow}
         </span>
       ) : null}

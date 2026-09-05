@@ -121,9 +121,9 @@ function PlanColumn({
       )}
     >
       <div className="flex items-start justify-between gap-3">
-        <h3 className="text-ps-ink font-display text-xl font-semibold">
+        <h2 className="text-ps-ink font-display text-xl font-semibold">
           {plan.name}
-        </h3>
+        </h2>
         {plan.popular ? (
           <span className="bg-ps-brand-wash text-ps-brand-deep font-display text-eyebrow rounded-full px-3 py-1 uppercase">
             Popular

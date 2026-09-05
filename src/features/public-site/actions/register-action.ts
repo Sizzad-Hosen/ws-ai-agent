@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 
 import { ROUTES } from "@/constants/routes";
 import { registrationFormSchema } from "@/features/public-site/registration-schema";
+import {
+  checkRegistrationAllowed,
+  clientAddress,
+  recordRegistration,
+} from "@/server/auth/login-throttle";
 import { repositories } from "@/server/repositories";
 
 export interface RegisterResult {
@@ -22,9 +27,11 @@ export interface RegisterResult {
  * tenant and no database are provisioned until an administrator approves it on
  * screen 03.
  *
- * Note: there is no rate limiting here. The route is anonymous and writes a
- * row, so it can be flooded. That needs an IP or captcha gate before this is
- * exposed publicly — see §2.10 in docs/IMPLEMENTATION_PLAN.md.
+ * Anonymous and write-capable, so it is defended twice: a hidden honeypot field
+ * catches a bot filling every input it can find, and a per-address sliding
+ * window bounds how many applications one source can queue. A submission that
+ * trips the honeypot is answered as though it succeeded, because telling a bot
+ * why it failed only helps it try again.
  */
 export async function registerAction(input: unknown): Promise<RegisterResult> {
   const parsed = registrationFormSchema.safeParse(input);
@@ -38,6 +45,22 @@ export async function registerAction(input: unknown): Promise<RegisterResult> {
   }
 
   const values = parsed.data;
+
+  if (values.companyWebsite !== undefined && values.companyWebsite !== "") {
+    return { success: true, message: "Application received." };
+  }
+
+  const address = await clientAddress();
+  const throttle = await checkRegistrationAllowed(address);
+
+  if (!throttle.allowed) {
+    return {
+      success: false,
+      message:
+        "Too many applications from this connection. Please try again later, or email us directly.",
+    };
+  }
+
   const ownerEmail = values.ownerEmail.trim().toLowerCase();
 
   try {
@@ -60,6 +83,8 @@ export async function registerAction(input: unknown): Promise<RegisterResult> {
       // The applicant does not choose a plan; approval assigns one.
       requestedPlanId: null,
     });
+
+    await recordRegistration(address);
 
     // The back-office queue counts pending registrations in its navigation.
     revalidatePath(ROUTES.bo.registrations);
