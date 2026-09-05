@@ -179,6 +179,27 @@ model AdminSession {
   @@map("admin_sessions")
 }
 
+/// Failed sign-in attempts, for throttling.
+///
+/// Not in the ERD. Recorded per email *and* per client address so a slow
+/// distributed guess is caught by the email key and a spray across accounts is
+/// caught by the address key. Only failures are written: a successful sign-in
+/// clears the email's history, so a legitimate user who mistypes twice is not
+/// punished once they get in.
+///
+/// Deliberately not a lockout flag on `admin_users`: a permanent per-account
+/// lock lets anyone deny service to a named administrator by guessing badly.
+model LoginAttempt {
+  id         String   @id @default(uuid()) @db.Uuid
+  /// "email:<address>" or "ip:<address>".
+  identifier String   @db.VarChar(200)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  // Supports both the sliding-window count and the sweeper.
+  @@index([identifier, createdAt])
+  @@map("login_attempts")
+}
+
 model AdminRoleRecord {
   id          String   @id @default(uuid()) @db.Uuid
   name        String   @unique @db.VarChar(80)

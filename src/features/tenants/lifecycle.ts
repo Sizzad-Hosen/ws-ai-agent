@@ -35,6 +35,26 @@ const TRANSITIONS: Readonly<
   reactivate: { from: ["suspended"], to: "active" },
 };
 
+/** The status a decision moves a tenant to, regardless of where it starts. */
+export function targetStatusFor(
+  decision: TenantDecision,
+): TenantApprovalStatus {
+  return TRANSITIONS[decision].to;
+}
+
+/**
+ * Whether a decision is legal from a given status.
+ *
+ * Exported so the rule can be tested without a database, and so neither caller
+ * has to reach into the table.
+ */
+export function isLegalTransition(
+  from: TenantApprovalStatus,
+  decision: TenantDecision,
+): boolean {
+  return TRANSITIONS[decision].from.includes(from);
+}
+
 const PAST_TENSE: Readonly<Record<TenantDecision, string>> = {
   approve: "approved",
   reject: "rejected",
@@ -87,9 +107,7 @@ export async function applyTenantDecision(
     };
   }
 
-  const transition = TRANSITIONS[decision];
-
-  if (!transition.from.includes(tenant.approvalStatus)) {
+  if (!isLegalTransition(tenant.approvalStatus, decision)) {
     return {
       outcome: "illegal-transition",
       message: `${tenant.businessName} cannot be ${PAST_TENSE[decision]} from its current status.`,
@@ -98,7 +116,10 @@ export async function applyTenantDecision(
   }
 
   try {
-    await repositories.tenants.updateApprovalStatus(tenantId, transition.to);
+    await repositories.tenants.updateApprovalStatus(
+      tenantId,
+      targetStatusFor(decision),
+    );
   } catch (error: unknown) {
     console.error("Unable to record the tenant status decision.", error);
     return {
@@ -111,6 +132,6 @@ export async function applyTenantDecision(
   return {
     outcome: "applied",
     message: `${tenant.businessName} ${PAST_TENSE[decision]}.`,
-    approvalStatus: transition.to,
+    approvalStatus: targetStatusFor(decision),
   };
 }
