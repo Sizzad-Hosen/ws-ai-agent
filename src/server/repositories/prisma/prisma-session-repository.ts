@@ -1,30 +1,42 @@
 import { AdminStatus } from "@prisma/client";
 
+import type { StoredBoSession } from "@/server/auth/types";
 import { prisma } from "@/server/db/prisma";
 import type {
   CreateSessionRecord,
   SessionRepository,
 } from "@/server/repositories/contracts/session-repository";
-import type { StoredBoSession } from "@/server/auth/types";
 
 import { mapAdmin } from "./mappers";
 
 export class PrismaSessionRepository implements SessionRepository {
   async create(input: CreateSessionRecord): Promise<void> {
-    await prisma.adminSession.create({ data: input });
+    await prisma.adminSession.create({
+      data: {
+        adminUserId: input.adminId,
+        tokenHash: input.tokenHash,
+        expiresAt: input.expiresAt,
+      },
+    });
   }
 
   async findByTokenHash(tokenHash: string): Promise<StoredBoSession | null> {
     const session = await prisma.adminSession.findUnique({
       where: { tokenHash },
-      include: { admin: true },
+      include: { adminUser: true },
     });
 
-    if (!session || session.admin.status !== AdminStatus.ACTIVE) {
+    // A revoked session is dead even before it expires.
+    if (
+      !session ||
+      session.revokedAt !== null ||
+      session.adminUser.status !== AdminStatus.ACTIVE
+    ) {
       return null;
     }
 
-    const admin = mapAdmin(session.admin);
+    const admin = mapAdmin(session.adminUser);
+
     return {
       id: session.id,
       expiresAt: session.expiresAt,

@@ -1,3 +1,26 @@
+// Master database — back-office console and public site.
+//
+// Source of truth: docs/db/SaaS Master DB — BO + Public Site.png
+// Every table, column, nullability and length below is transcribed from that
+// ERD. Three classes of decision were required because the diagram does not
+// express them; each is marked inline:
+//
+//   [D-03] Enum members. Every enum column is drawn simply as `enum`. Members
+//          marked (mock) are visible in docs/uiux/bo-site/; the rest are
+//          conventional defaults awaiting confirmation.
+//   [D-07] `timestamptz` in place of the ERD's `timestamp`. Tenants span
+//          US-East-1, LatAm and +44; a naive timestamp records the wrong
+//          instant. This changes storage, not the logical model.
+//   [D-08] Explicit decimal precision. Postgres requires one for money.
+//
+// Physical concerns the ERD does not cover — indexes and referential actions —
+// are chosen here and commented where the reason is not obvious.
+//
+// Still NOT in this schema because they are not in the ERD, and remain open in
+// docs/IMPLEMENTATION_PLAN.md: platform_audit_logs (§2.3), the
+// admin_users → admin_roles FK (§2.4), tenants.registration_id (§2.5), and the
+// WhatsApp / usage-rollup / message-log tables (§2.2).
+
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["driverAdapters"]
@@ -8,42 +31,79 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum PlatformAdminRole {
+// ---------------------------------------------------------------- enums [D-03]
+
+enum AdminRole {
   SUPER_ADMIN
   ADMIN
   SUPPORT
   FINANCE
+
+  @@map("admin_role")
 }
 
 enum AdminStatus {
   INVITED
   ACTIVE
   SUSPENDED
+
+  @@map("admin_status")
 }
 
-enum TenantStatus {
+/// Screen 02 renders Active / Trial / Suspended; screen 03 renders Pending
+/// Review. This single column therefore carries both approval and lifecycle
+/// meaning — see D-06.
+enum TenantApprovalStatus {
+  PENDING_REVIEW
   TRIAL
   ACTIVE
   SUSPENDED
+  REJECTED
   ARCHIVED
+
+  @@map("tenant_approval_status")
 }
 
-enum MembershipRole {
-  OWNER
-  ADMIN
-  MEMBER
+enum RegistrationStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+
+  @@map("registration_status")
 }
 
-enum MembershipStatus {
-  INVITED
-  ACTIVE
-  SUSPENDED
+/// The three checklist items on screen 03 (mock).
+enum RegistrationCheckType {
+  BUSINESS_VERIFICATION
+  PAYMENT_METHOD_LINKED
+  WHATSAPP_API_APPROVAL
+
+  @@map("registration_check_type")
 }
 
-enum PlanStatus {
-  ACTIVE
-  INACTIVE
-  ARCHIVED
+enum RegistrationCheckStatus {
+  PENDING
+  PASSED
+  FAILED
+
+  @@map("registration_check_status")
+}
+
+enum TenantDatabaseStatus {
+  PENDING
+  PROVISIONING
+  READY
+  FAILED
+
+  @@map("tenant_database_status")
+}
+
+/// Screen 06 offers monthly and annual pricing (mock).
+enum BillingCycle {
+  MONTHLY
+  ANNUAL
+
+  @@map("billing_cycle")
 }
 
 enum SubscriptionStatus {
@@ -52,226 +112,364 @@ enum SubscriptionStatus {
   PAST_DUE
   CANCELED
   EXPIRED
+
+  @@map("subscription_status")
 }
 
-enum ProvisioningStatus {
-  PENDING
-  PROVISIONING
-  READY
-  FAILED
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  PAID
+  VOID
+  UNCOLLECTIBLE
+
+  @@map("invoice_status")
 }
 
-model PlatformAdmin {
-  id             String             @id @default(cuid())
-  name           String
-  email          String             @unique
-  passwordHash   String
-  role           PlatformAdminRole
-  status         AdminStatus        @default(INVITED)
-  lastSignedInAt DateTime?          @db.Timestamptz(3)
-  createdAt      DateTime           @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime           @updatedAt @db.Timestamptz(3)
-  sessions       AdminSession[]
-  auditLogs      PlatformAuditLog[]
+enum AiProviderStatus {
+  ACTIVE
+  INACTIVE
+
+  @@map("ai_provider_status")
+}
+
+enum PublicPageStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+
+  @@map("public_page_status")
+}
+
+// ------------------------------------------------- back office: identity & RBAC
+
+model AdminUser {
+  id           String      @id @default(uuid()) @db.Uuid
+  name         String      @db.VarChar(120)
+  email        String      @unique @db.VarChar(190)
+  passwordHash String      @map("password_hash")
+  role         AdminRole
+  status       AdminStatus @default(INVITED)
+  avatarUrl    String?     @map("avatar_url")
+  lastLoginAt  DateTime?   @map("last_login_at") @db.Timestamptz(3)
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessions AdminSession[]
 
   @@index([status])
+  @@map("admin_users")
 }
 
 model AdminSession {
-  id        String        @id @default(cuid())
-  tokenHash String        @unique
-  adminId   String
-  expiresAt DateTime      @db.Timestamptz(3)
-  createdAt DateTime      @default(now()) @db.Timestamptz(3)
-  admin     PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  id          String    @id @default(uuid()) @db.Uuid
+  adminUserId String    @map("admin_user_id") @db.Uuid
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz(3)
+  ipAddress   String?   @map("ip_address") @db.Inet
+  userAgent   String?   @map("user_agent")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  @@index([adminId])
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+  // Supports the expired-session sweeper.
   @@index([expiresAt])
+  @@map("admin_sessions")
 }
 
-model TenantUser {
-  id          String             @id @default(cuid())
-  name        String
-  email       String             @unique
-  createdAt   DateTime           @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime           @updatedAt @db.Timestamptz(3)
-  memberships TenantMembership[]
+model AdminRoleRecord {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique @db.VarChar(80)
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  permissions AdminRolePermission[]
+
+  @@map("admin_roles")
+}
+
+model Permission {
+  id          String  @id @default(uuid()) @db.Uuid
+  code        String  @unique @db.VarChar(120)
+  description String?
+
+  roles AdminRolePermission[]
+
+  @@map("permissions")
+}
+
+/// Join table; the ERD marks both columns PK,FK.
+model AdminRolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       AdminRoleRecord @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission      @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("admin_role_permissions")
+}
+
+// ------------------------------------------------------ tenants & registration
+
+model TenantRegistration {
+  id               String             @id @default(uuid()) @db.Uuid
+  registrationCode String             @unique @map("registration_code") @db.VarChar(40)
+  businessName     String             @map("business_name") @db.VarChar(180)
+  ownerName        String             @map("owner_name") @db.VarChar(120)
+  ownerEmail       String             @map("owner_email") @db.VarChar(190)
+  ownerPhone       String             @map("owner_phone") @db.VarChar(30)
+  industry         String             @db.VarChar(100)
+  region           String             @db.VarChar(80)
+  requestedPlanId  String?            @map("requested_plan_id") @db.Uuid
+  status           RegistrationStatus @default(PENDING_REVIEW)
+
+  // Restrict: a plan referenced by a pending registration must not vanish.
+  requestedPlan Plan?                     @relation(fields: [requestedPlanId], references: [id], onDelete: Restrict)
+  checks        TenantRegistrationCheck[]
+
+  @@index([status])
+  @@index([requestedPlanId])
+  @@map("tenant_registrations")
+}
+
+model TenantRegistrationCheck {
+  id                   String                  @id @default(uuid()) @db.Uuid
+  tenantRegistrationId String                  @map("tenant_registration_id") @db.Uuid
+  checkType            RegistrationCheckType   @map("check_type")
+  status               RegistrationCheckStatus @default(PENDING)
+  notes                String?
+  checkedAt            DateTime?               @map("checked_at") @db.Timestamptz(3)
+  /// The ERD models this as a bare UUID with no foreign key, so a deleted
+  /// admin leaves an orphan reference and "checked by" cannot be joined.
+  /// Transcribed as drawn — see §2.9c.
+  checkedBy            String?                 @map("checked_by") @db.Uuid
+
+  registration TenantRegistration @relation(fields: [tenantRegistrationId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantRegistrationId, checkType])
+  @@index([tenantRegistrationId])
+  @@map("tenant_registration_checks")
 }
 
 model Tenant {
-  id               String                    @id @default(cuid())
-  name             String
-  slug             String                    @unique
-  status           TenantStatus              @default(TRIAL)
-  createdAt        DateTime                  @default(now()) @db.Timestamptz(3)
-  updatedAt        DateTime                  @updatedAt @db.Timestamptz(3)
-  memberships      TenantMembership[]
-  subscriptions    Subscription[]
-  databaseRegistry TenantDatabaseRegistry?
-  whatsappRoutes   WhatsappRoutingMetadata[]
-  usageSummaries   UsageSummary[]
-  billingMetadata  BillingMetadata?
-  featureFlags     TenantFeatureFlag[]
+  id             String               @id @default(uuid()) @db.Uuid
+  tenantCode     String               @unique @map("tenant_code") @db.VarChar(40)
+  businessName   String               @map("business_name") @db.VarChar(180)
+  ownerName      String               @map("owner_name") @db.VarChar(120)
+  ownerEmail     String               @map("owner_email") @db.VarChar(190)
+  ownerPhone     String               @map("owner_phone") @db.VarChar(30)
+  industry       String?              @db.VarChar(100)
+  region         String?              @db.VarChar(80)
+  approvalStatus TenantApprovalStatus @default(PENDING_REVIEW) @map("approval_status")
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  database      TenantDatabase?
+  subscriptions Subscription[]
+  invoices      Invoice[]
+
+  @@index([approvalStatus])
+  @@index([businessName])
+  @@index([ownerEmail])
+  @@map("tenants")
+}
+
+/// Connection metadata for a tenant's dedicated database.
+///
+/// `secretReference` and `usernameReference` are pointers into a secret
+/// manager, never credentials themselves, and must never be selected into a
+/// response payload (S-03).
+model TenantDatabase {
+  id                String               @id @default(uuid()) @db.Uuid
+  tenantId          String               @unique @map("tenant_id") @db.Uuid
+  databaseName      String               @map("database_name") @db.VarChar(150)
+  hostReference     String               @map("host_reference") @db.VarChar(200)
+  port              Int
+  usernameReference String               @map("username_reference") @db.VarChar(200)
+  secretReference   String               @map("secret_reference")
+  status            TenantDatabaseStatus @default(PENDING)
+  schemaVersion     String               @map("schema_version") @db.VarChar(40)
+  region            String               @db.VarChar(80)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([status])
+  @@map("tenant_databases")
 }
 
-model TenantMembership {
-  id        String           @id @default(cuid())
-  tenantId  String
-  userId    String
-  role      MembershipRole
-  status    MembershipStatus @default(INVITED)
-  createdAt DateTime         @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime         @updatedAt @db.Timestamptz(3)
-  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user      TenantUser       @relation(fields: [userId], references: [id], onDelete: Cascade)
+// ------------------------------------------------------------------ commercial
 
-  @@unique([tenantId, userId])
-  @@index([userId])
-  @@index([tenantId, role])
-}
+model Plan {
+  id           String   @id @default(uuid()) @db.Uuid
+  code         String   @unique @db.VarChar(100)
+  name         String   @db.VarChar(120)
+  description  String?
+  /// Null means the tier is negotiated ("Custom" on screen 05).
+  monthlyPrice Decimal? @map("monthly_price") @db.Decimal(12, 2)
+  annualPrice  Decimal? @map("annual_price") @db.Decimal(12, 2)
+  currency     String   @db.VarChar(10)
+  /// Limits, feature toggles and marketing highlights. The ERD gives this
+  /// column no structure; the versioned contract lives in
+  /// src/features/plans/types.ts and is validated on write (D-05).
+  features     Json
+  sortOrder    Int      @map("sort_order")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-model TenantDatabaseRegistry {
-  id                 String             @id @default(cuid())
-  tenantId           String             @unique
-  databaseKey        String             @unique
-  secretReference    String             @unique
-  region             String
-  provisioningStatus ProvisioningStatus @default(PENDING)
-  provisionedAt      DateTime?          @db.Timestamptz(3)
-  createdAt          DateTime           @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime           @updatedAt @db.Timestamptz(3)
-  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriptions Subscription[]
+  registrations TenantRegistration[]
 
-  @@index([provisioningStatus])
-}
-
-model SubscriptionPlan {
-  id                  String         @id @default(cuid())
-  code                String         @unique
-  name                String
-  description         String
-  status              PlanStatus     @default(ACTIVE)
-  monthlyPriceMinor   Int
-  currency            String         @db.VarChar(3)
-  monthlyMessageLimit Int
-  adminSeatLimit      Int
-  whatsappNumberLimit Int
-  createdAt           DateTime       @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime       @updatedAt @db.Timestamptz(3)
-  subscriptions       Subscription[]
-
-  @@index([status])
+  @@index([isActive, sortOrder])
+  @@map("plans")
 }
 
 model Subscription {
-  id                 String             @id @default(cuid())
-  tenantId           String
-  planId             String
-  status             SubscriptionStatus @default(TRIALING)
-  currentPeriodStart DateTime           @db.Timestamptz(3)
-  currentPeriodEnd   DateTime           @db.Timestamptz(3)
-  cancelAtPeriodEnd  Boolean            @default(false)
-  createdAt          DateTime           @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime           @updatedAt @db.Timestamptz(3)
-  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  plan               SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  id            String             @id @default(uuid()) @db.Uuid
+  tenantId      String             @map("tenant_id") @db.Uuid
+  planId        String             @map("plan_id") @db.Uuid
+  billingCycle  BillingCycle       @default(MONTHLY) @map("billing_cycle")
+  status        SubscriptionStatus @default(TRIALING)
+  /// Price agreed at signup, so catalogue edits never reprice existing
+  /// subscribers. NOT NULL as drawn, which currently prevents subscribing a
+  /// tenant to a negotiated "Custom" plan — see §2.7 / D-04.
+  priceSnapshot Decimal            @map("price_snapshot") @db.Decimal(12, 2)
+  currency      String             @db.VarChar(10)
+
+  startedAt          DateTime  @map("started_at") @db.Timestamptz(3)
+  currentPeriodStart DateTime  @map("current_period_start") @db.Timestamptz(3)
+  currentPeriodEnd   DateTime  @map("current_period_end") @db.Timestamptz(3)
+  cancelledAt        DateTime? @map("cancelled_at") @db.Timestamptz(3)
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  // Restrict: a plan with subscribers cannot be deleted out from under them.
+  plan     Plan      @relation(fields: [planId], references: [id], onDelete: Restrict)
+  invoices Invoice[]
 
   @@index([tenantId, status])
   @@index([planId])
   @@index([currentPeriodEnd])
+  @@map("subscriptions")
 }
 
-model PlatformAiSettings {
-  id                 String   @id @default("platform")
-  defaultProviderKey String
-  defaultModelKey    String
-  isEnabled          Boolean  @default(false)
-  createdAt          DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+model Invoice {
+  id             String        @id @default(uuid()) @db.Uuid
+  tenantId       String        @map("tenant_id") @db.Uuid
+  subscriptionId String        @map("subscription_id") @db.Uuid
+  invoiceNumber  String        @unique @map("invoice_number") @db.VarChar(80)
+  status         InvoiceStatus @default(DRAFT)
+  subtotal       Decimal       @db.Decimal(12, 2)
+  tax            Decimal       @db.Decimal(12, 2)
+  total          Decimal       @db.Decimal(12, 2)
+  currency       String        @db.VarChar(10)
+  dueAt          DateTime?     @map("due_at") @db.Timestamptz(3)
+  /// The final column of `invoices` is occluded by an overlapping box in the
+  /// ERD; read as a nullable timestamp and transcribed as `paid_at` (D-09).
+  paidAt         DateTime?     @map("paid_at") @db.Timestamptz(3)
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([subscriptionId])
+  @@index([status, dueAt])
+  @@map("invoices")
 }
 
-model PlatformConfiguration {
-  id              String   @id @default("platform")
-  maintenanceMode Boolean  @default(false)
-  supportEmail    String
-  createdAt       DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+// -------------------------------------------------------------- AI configuration
+
+model AiProvider {
+  id        String           @id @default(uuid()) @db.Uuid
+  name      String           @unique @db.VarChar(80)
+  status    AiProviderStatus @default(ACTIVE)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  models         AiModel[]
+  configurations PlatformAiConfiguration[]
+
+  @@map("ai_providers")
 }
 
-model WhatsappRoutingMetadata {
-  id            String   @id @default(cuid())
-  tenantId      String
-  phoneNumberId String   @unique
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+model AiModel {
+  id           String   @id @default(uuid()) @db.Uuid
+  providerId   String   @map("provider_id") @db.Uuid
+  modelName    String   @map("model_name") @db.VarChar(120)
+  capabilities Json
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  @@index([tenantId, isActive])
+  provider       AiProvider                @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  configurations PlatformAiConfiguration[]
+
+  @@unique([providerId, modelName])
+  @@index([providerId, isActive])
+  @@map("ai_models")
 }
 
-model UsageSummary {
-  id                String   @id @default(cuid())
-  tenantId          String
-  periodStart       DateTime @db.Date
-  periodEnd         DateTime @db.Date
-  messagesProcessed Int      @default(0)
-  aiTokensConsumed  BigInt   @default(0)
-  createdAt         DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
-  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+/// Platform-wide AI provider selection and token allocation policy.
+///
+/// `secretReference` points at the credential in a secret manager. It is
+/// write-only: no read path returns it, in any form (S-01).
+model PlatformAiConfiguration {
+  id                      String   @id @default(uuid()) @db.Uuid
+  providerId              String   @map("provider_id") @db.Uuid
+  modelId                 String   @map("model_id") @db.Uuid
+  secretReference         String   @map("secret_reference")
+  isActive                Boolean  @default(false) @map("is_active")
+  globalTokenLimit        BigInt?  @map("global_token_limit")
+  defaultTenantTokenLimit BigInt?  @map("default_tenant_token_limit")
+  warningThresholdPercent Int?     @map("warning_threshold_percent")
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  @@unique([tenantId, periodStart, periodEnd])
-  @@index([periodStart, periodEnd])
+  provider AiProvider @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  model    AiModel    @relation(fields: [modelId], references: [id], onDelete: Restrict)
+
+  @@index([providerId])
+  @@index([modelId])
+  @@map("platform_ai_configurations")
 }
 
-model BillingMetadata {
-  id                        String   @id @default(cuid())
-  tenantId                  String   @unique
-  billingEmail              String
-  externalCustomerReference String?  @unique
-  createdAt                 DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt                 DateTime @updatedAt @db.Timestamptz(3)
-  tenant                    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+// --------------------------------------------------------------- public site
+
+model PublicPage {
+  id          String           @id @default(uuid()) @db.Uuid
+  slug        String           @unique @db.VarChar(180)
+  title       String           @db.VarChar(220)
+  content     String
+  status      PublicPageStatus @default(DRAFT)
+  seoMetadata Json?            @map("seo_metadata")
+  publishedAt DateTime?        @map("published_at") @db.Timestamptz(3)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  // Serves the public site's "published pages" lookup.
+  @@index([status, publishedAt])
+  @@map("public_pages")
 }
 
-model FeatureFlag {
-  id                 String              @id @default(cuid())
-  key                String              @unique
-  description        String
-  isEnabledByDefault Boolean             @default(false)
-  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
-  tenantOverrides    TenantFeatureFlag[]
+model PublicFaq {
+  id        String   @id @default(uuid()) @db.Uuid
+  question  String   @db.VarChar(300)
+  answer    String
+  sortOrder Int      @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([isActive, sortOrder])
+  @@map("public_faqs")
 }
 
-model TenantFeatureFlag {
-  id            String      @id @default(cuid())
-  tenantId      String
-  featureFlagId String
-  isEnabled     Boolean
-  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime    @updatedAt @db.Timestamptz(3)
-  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  featureFlag   FeatureFlag @relation(fields: [featureFlagId], references: [id], onDelete: Cascade)
+model PublicSiteSetting {
+  id        String   @id @default(uuid()) @db.Uuid
+  siteKey   String   @unique @map("site_key") @db.VarChar(100)
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  @@unique([tenantId, featureFlagId])
-  @@index([featureFlagId])
-}
-
-model PlatformAuditLog {
-  id           String         @id @default(cuid())
-  actorAdminId String?
-  action       String
-  entityType   String
-  entityId     String?
-  metadata     Json
-  occurredAt   DateTime       @default(now()) @db.Timestamptz(3)
-  actorAdmin   PlatformAdmin? @relation(fields: [actorAdminId], references: [id], onDelete: SetNull)
-
-  @@index([actorAdminId])
-  @@index([entityType, entityId])
-  @@index([occurredAt])
+  @@map("public_site_settings")
 }

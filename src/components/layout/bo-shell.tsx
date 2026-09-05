@@ -6,16 +6,19 @@ import type { BoSessionAdmin } from "@/server/auth/types";
 
 interface BoShellProps {
   readonly admin: BoSessionAdmin;
+  readonly allowedHrefs: readonly string[];
   readonly children: ReactNode;
 }
 
-export function BoShell({ admin, children }: BoShellProps) {
+export function BoShell({ admin, allowedHrefs, children }: BoShellProps) {
   return (
-    <div className="flex min-h-screen">
-      <BoSidebar />
+    <div className="bg-background flex min-h-screen">
+      <BoSidebar allowedHrefs={allowedHrefs} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <BoHeader admin={admin} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+        <BoHeader admin={admin} notificationCount={3} />
+        <main className="container-bo flex-1 p-4 sm:p-6 lg:p-8">
+          {children}
+        </main>
       </div>
     </div>
   );

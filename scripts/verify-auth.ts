@@ -36,8 +36,8 @@ async function main(): Promise<void> {
 
   await repositories.sessions.deleteByTokenHash(hashSessionToken(result.token));
 
-  const dashboard = await services.dashboard.getSummary();
-  if (dashboard.metrics.some((metric) => metric.value < 1)) {
+  const dashboard = await services.dashboard.getSummary("30d");
+  if (dashboard.kpis.length === 0) {
     throw new Error(
       "Seeded master data was not available to the dashboard service.",
     );

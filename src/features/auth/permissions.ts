@@ -9,6 +9,15 @@ import {
 
 const allPermissions = Object.values(PLATFORM_PERMISSIONS);
 
+/**
+ * Interim role→permission map.
+ *
+ * The ERD models authorization twice (`admin_users.role` enum *and* the
+ * `admin_roles`/`permissions`/`admin_role_permissions` triple, with no FK
+ * joining them). Until D-01 in docs/IMPLEMENTATION_PLAN.md is decided this map
+ * stays the single source, and every call site goes through `can()` so the
+ * switch to database-backed RBAC touches only this file.
+ */
 export const ROLE_PERMISSIONS: Readonly<
   Record<PlatformAdminRole, readonly PlatformPermission[]>
 > = {
@@ -20,6 +29,9 @@ export const ROLE_PERMISSIONS: Readonly<
     PLATFORM_PERMISSIONS.DASHBOARD_READ,
     PLATFORM_PERMISSIONS.TENANTS_READ,
     PLATFORM_PERMISSIONS.SUBSCRIPTIONS_READ,
+    PLATFORM_PERMISSIONS.PLANS_READ,
+    PLATFORM_PERMISSIONS.WHATSAPP_READ,
+    PLATFORM_PERMISSIONS.MESSAGES_READ,
     PLATFORM_PERMISSIONS.AUDIT_LOGS_READ,
   ],
   [PLATFORM_ADMIN_ROLES.FINANCE]: [
@@ -28,6 +40,7 @@ export const ROLE_PERMISSIONS: Readonly<
     PLATFORM_PERMISSIONS.PLANS_READ,
     PLATFORM_PERMISSIONS.SUBSCRIPTIONS_READ,
     PLATFORM_PERMISSIONS.SUBSCRIPTIONS_MANAGE,
+    PLATFORM_PERMISSIONS.USAGE_READ,
     PLATFORM_PERMISSIONS.BILLING_READ,
   ],
 };

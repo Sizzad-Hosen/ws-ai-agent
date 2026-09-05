@@ -10,12 +10,12 @@ import { mapAdmin } from "./mappers";
 
 export class PrismaAdminRepository implements AdminRepository {
   async findById(id: string): Promise<PlatformAdmin | null> {
-    const admin = await prisma.platformAdmin.findUnique({ where: { id } });
+    const admin = await prisma.adminUser.findUnique({ where: { id } });
     return admin ? mapAdmin(admin) : null;
   }
 
   async findByEmail(email: string): Promise<PlatformAdmin | null> {
-    const admin = await prisma.platformAdmin.findUnique({
+    const admin = await prisma.adminUser.findUnique({
       where: { email: email.toLowerCase() },
     });
     return admin ? mapAdmin(admin) : null;
@@ -24,7 +24,7 @@ export class PrismaAdminRepository implements AdminRepository {
   async findCredentialsByEmail(
     email: string,
   ): Promise<AdminCredentials | null> {
-    const admin = await prisma.platformAdmin.findUnique({
+    const admin = await prisma.adminUser.findUnique({
       where: { email: email.toLowerCase() },
     });
 
@@ -32,12 +32,11 @@ export class PrismaAdminRepository implements AdminRepository {
       return null;
     }
 
-    const mapped = mapAdmin(admin);
     return {
       id: admin.id,
       email: admin.email,
       passwordHash: admin.passwordHash,
-      role: mapped.role,
+      role: mapAdmin(admin).role,
       isActive: admin.status === AdminStatus.ACTIVE,
     };
   }
@@ -55,24 +54,26 @@ export class PrismaAdminRepository implements AdminRepository {
           ],
         }
       : undefined;
-    const [items, total] = await prisma.$transaction([
-      prisma.platformAdmin.findMany({ where, skip: offset, take: limit }),
-      prisma.platformAdmin.count({ where }),
-    ]);
+
+    const items = await prisma.adminUser.findMany({
+      where,
+      skip: offset,
+      take: limit,
+      orderBy: { name: "asc" },
+    });
+    const total = await prisma.adminUser.count({ where });
 
     return { items: items.map(mapAdmin), total, limit, offset };
   }
 
   async countActive(): Promise<number> {
-    return prisma.platformAdmin.count({
-      where: { status: AdminStatus.ACTIVE },
-    });
+    return prisma.adminUser.count({ where: { status: AdminStatus.ACTIVE } });
   }
 
   async markSignedIn(id: string, signedInAt: Date): Promise<void> {
-    await prisma.platformAdmin.update({
+    await prisma.adminUser.update({
       where: { id },
-      data: { lastSignedInAt: signedInAt },
+      data: { lastLoginAt: signedInAt },
     });
   }
 }

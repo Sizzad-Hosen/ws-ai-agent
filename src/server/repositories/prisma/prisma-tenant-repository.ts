@@ -1,87 +1,167 @@
-import { MembershipRole, MembershipStatus, Prisma } from "@prisma/client";
+import { Prisma, TenantApprovalStatus } from "@prisma/client";
 
-import type { Tenant } from "@/features/tenants/types";
+import type {
+  Tenant,
+  TenantDetail,
+  TenantListItem,
+} from "@/features/tenants/types";
 import { prisma } from "@/server/db/prisma";
-import type { TenantRepository } from "@/server/repositories/contracts/tenant-repository";
-import type { ListQuery, PaginatedResult } from "@/types/repository";
+import type {
+  TenantListQuery,
+  TenantRepository,
+} from "@/server/repositories/contracts/tenant-repository";
+import type { PaginatedResult } from "@/types/repository";
+import type { TenantApprovalStatus as DomainTenantApprovalStatus } from "@/types/status";
 
-import { provisioningStatusMap, tenantStatusMap } from "./mappers";
+import {
+  mapPlan,
+  mapTenant,
+  mapTenantDatabase,
+  tenantApprovalToPrisma,
+} from "./mappers";
 
-const tenantWithMasterRelations = Prisma.validator<Prisma.TenantDefaultArgs>()({
-  include: {
-    databaseRegistry: true,
-    memberships: {
-      where: { role: MembershipRole.OWNER, status: MembershipStatus.ACTIVE },
-      include: { user: true },
-      take: 1,
-    },
-  },
-});
-
-type TenantWithMasterRelations = Prisma.TenantGetPayload<
-  typeof tenantWithMasterRelations
->;
-
-function mapTenant(tenant: TenantWithMasterRelations): Tenant {
-  const owner = tenant.memberships[0]?.user;
-  const database = tenant.databaseRegistry;
-
-  return {
-    id: tenant.id,
-    name: tenant.name,
-    slug: tenant.slug,
-    status: tenantStatusMap[tenant.status],
-    owner: owner
-      ? { id: owner.id, name: owner.name, email: owner.email }
-      : null,
-    database: database
-      ? {
-          tenantId: database.tenantId,
-          databaseKey: database.databaseKey,
-          region: database.region,
-          provisioningStatus:
-            provisioningStatusMap[database.provisioningStatus],
-          provisionedAt: database.provisionedAt?.toISOString() ?? null,
-        }
-      : null,
-    createdAt: tenant.createdAt.toISOString(),
-    updatedAt: tenant.updatedAt.toISOString(),
-  };
-}
+/** The subscription that determines the plan and MRR shown for a tenant. */
+const CURRENT_SUBSCRIPTION = {
+  where: { cancelledAt: null },
+  orderBy: { startedAt: Prisma.SortOrder.desc },
+  take: 1,
+  include: { plan: true },
+} as const;
 
 export class PrismaTenantRepository implements TenantRepository {
   async findById(id: string): Promise<Tenant | null> {
-    const tenant = await prisma.tenant.findUnique({
-      where: { id },
-      ...tenantWithMasterRelations,
-    });
+    const tenant = await prisma.tenant.findUnique({ where: { id } });
     return tenant ? mapTenant(tenant) : null;
   }
 
-  async findMany(query: ListQuery = {}): Promise<PaginatedResult<Tenant>> {
+  async findDetailById(id: string): Promise<TenantDetail | null> {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id },
+      include: {
+        database: true,
+        subscriptions: CURRENT_SUBSCRIPTION,
+      },
+    });
+
+    if (!tenant) {
+      return null;
+    }
+
+    const subscription = tenant.subscriptions[0];
+
+    return {
+      tenant: mapTenant(tenant),
+      planName: subscription ? mapPlan(subscription.plan).name : null,
+      subscribedAt: subscription?.startedAt.toISOString() ?? null,
+      infrastructure: {
+        // Screens 04 and 11 need WhatsApp connection and AI telemetry, which
+        // have no tables in the ERD (§2.2 / D-10). Reported as unavailable
+        // rather than fabricated.
+        whatsapp: null,
+        ai: null,
+        database: tenant.database ? mapTenantDatabase(tenant.database) : null,
+        checkedAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  async findMany(
+    query: TenantListQuery = {},
+  ): Promise<PaginatedResult<TenantListItem>> {
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
-    const where = query.search
-      ? {
-          OR: [
-            { name: { contains: query.search, mode: "insensitive" as const } },
-            { slug: { contains: query.search, mode: "insensitive" as const } },
-          ],
-        }
-      : undefined;
-    const [items, total] = await prisma.$transaction([
-      prisma.tenant.findMany({
-        where,
-        skip: offset,
-        take: limit,
-        ...tenantWithMasterRelations,
-      }),
-      prisma.tenant.count({ where }),
-    ]);
-    return { items: items.map(mapTenant), total, limit, offset };
+
+    const where: Prisma.TenantWhereInput = {
+      ...(query.status
+        ? { approvalStatus: tenantApprovalToPrisma[query.status] }
+        : {}),
+      ...(query.planCode
+        ? {
+            subscriptions: {
+              some: { cancelledAt: null, plan: { code: query.planCode } },
+            },
+          }
+        : {}),
+      ...(query.search
+        ? {
+            OR: [
+              {
+                businessName: {
+                  contains: query.search,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+              {
+                tenantCode: {
+                  contains: query.search,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+              {
+                ownerEmail: {
+                  contains: query.search,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+              {
+                ownerName: {
+                  contains: query.search,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+
+    // Sequential rather than $transaction([...]): the batch form pins one
+    // pooled connection and races with other in-flight queries under the pg
+    // driver adapter. A read-only list does not need snapshot isolation.
+    const tenants = await prisma.tenant.findMany({
+      where,
+      skip: offset,
+      take: limit,
+      orderBy: { createdAt: Prisma.SortOrder.desc },
+      include: { subscriptions: CURRENT_SUBSCRIPTION },
+    });
+    const total = await prisma.tenant.count({ where });
+
+    const items: TenantListItem[] = tenants.map((tenant) => {
+      const subscription = tenant.subscriptions[0];
+
+      return {
+        tenant: mapTenant(tenant),
+        planName: subscription ? subscription.plan.name : null,
+        metrics: {
+          // WhatsApp and AI status come from sources that do not exist yet
+          // (§2.2). Null renders as "—" rather than a default, so "no data"
+          // never reads as "not connected".
+          aiOnline: null,
+          whatsappStatus: null,
+        },
+      };
+    });
+
+    return { items, total, limit, offset };
   }
 
   async count(): Promise<number> {
     return prisma.tenant.count();
+  }
+
+  async countActive(): Promise<number> {
+    return prisma.tenant.count({
+      where: { approvalStatus: TenantApprovalStatus.ACTIVE },
+    });
+  }
+
+  async updateApprovalStatus(
+    id: string,
+    status: DomainTenantApprovalStatus,
+  ): Promise<void> {
+    await prisma.tenant.update({
+      where: { id },
+      data: { approvalStatus: tenantApprovalToPrisma[status] },
+    });
   }
 }

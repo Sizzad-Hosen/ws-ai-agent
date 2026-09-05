@@ -1,8 +1,9 @@
-import type { SubscriptionPlan } from "@/features/plans/types";
-import type { ListQuery, PaginatedResult } from "@/types/repository";
+import type { Plan, PlanListItem } from "@/features/plans/types";
 
 export interface PlanRepository {
-  findById(id: string): Promise<SubscriptionPlan | null>;
-  findMany(query?: ListQuery): Promise<PaginatedResult<SubscriptionPlan>>;
+  findById(id: string): Promise<Plan | null>;
+  findByCode(code: string): Promise<Plan | null>;
+  /** Ordered by `sort_order`; drafts included so admins can see them. */
+  findAll(): Promise<readonly PlanListItem[]>;
   countActive(): Promise<number>;
 }
