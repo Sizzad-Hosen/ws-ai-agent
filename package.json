@@ -18,7 +18,8 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "verify:auth": "node --conditions=react-server --import tsx scripts/verify-auth.ts",
-    "verify:writes": "node --conditions=react-server --import tsx scripts/verify-writes.ts"
+    "verify:writes": "node --conditions=react-server --import tsx scripts/verify-writes.ts",
+    "verify:public": "node --conditions=react-server --import tsx scripts/verify-public.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

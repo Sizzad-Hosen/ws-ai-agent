@@ -6,6 +6,7 @@ import type {
 } from "@/features/registrations/types";
 import { prisma } from "@/server/db/prisma";
 import type {
+  NewRegistration,
   RegistrationListQuery,
   RegistrationRepository,
 } from "@/server/repositories/contracts/registration-repository";
@@ -96,6 +97,42 @@ export class PrismaRegistrationRepository implements RegistrationRepository {
     return prisma.tenantRegistration.count({
       where: { status: "PENDING_REVIEW" },
     });
+  }
+
+  async existsForEmail(email: string): Promise<boolean> {
+    const existing = await prisma.tenantRegistration.findFirst({
+      // A rejected applicant may re-apply; a live one may not queue twice.
+      where: {
+        ownerEmail: email,
+        status: { in: ["PENDING_REVIEW", "APPROVED"] },
+      },
+      select: { id: true },
+    });
+
+    return existing !== null;
+  }
+
+  async create(values: NewRegistration): Promise<string> {
+    const code = `REG-${Date.now().toString(36).toUpperCase()}`;
+
+    // The registration and its checklist are one unit: a registration with no
+    // checks would reach the review queue with nothing to action.
+    await prisma.tenantRegistration.create({
+      data: {
+        ...values,
+        registrationCode: code,
+        status: "PENDING_REVIEW",
+        checks: {
+          create: [
+            { checkType: "BUSINESS_VERIFICATION" },
+            { checkType: "PAYMENT_METHOD_LINKED" },
+            { checkType: "WHATSAPP_API_APPROVAL" },
+          ],
+        },
+      },
+    });
+
+    return code;
   }
 }
 
