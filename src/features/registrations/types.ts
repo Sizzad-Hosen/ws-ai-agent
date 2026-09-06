@@ -17,12 +17,11 @@ export interface TenantRegistration {
   readonly requestedPlanId: string | null;
   readonly status: RegistrationStatus;
   /**
-   * `tenant_registrations` has no `created_at` column in the ERD, so this is
-   * derived from the earliest completed check and is null until one exists.
-   * Screen 03 shows a "Signed up" date that the schema cannot supply — see
-   * D-34 in docs/IMPLEMENTATION_PLAN.md.
+   * `tenant_registrations.created_at`. Not on the ERD; added so screen 03 can
+   * show a real "Signed up" date and the review queue can order by arrival —
+   * see D-34 in docs/IMPLEMENTATION_PLAN.md.
    */
-  readonly submittedAt: string | null;
+  readonly submittedAt: string;
 }
 
 /** `tenant_registration_checks`. */

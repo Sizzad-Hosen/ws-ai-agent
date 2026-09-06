@@ -25,6 +25,7 @@ export const AUDIT_ACTIONS = {
   TENANT_REACTIVATE: "tenant.reactivate",
   REGISTRATION_APPROVE: "registration.approve",
   REGISTRATION_REJECT: "registration.reject",
+  REGISTRATION_CHECK: "registration.check",
   PLAN_CREATE: "plan.create",
   PLAN_UPDATE: "plan.update",
   PLAN_DELETE: "plan.delete",

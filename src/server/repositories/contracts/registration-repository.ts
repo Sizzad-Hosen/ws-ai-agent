@@ -3,7 +3,7 @@ import type {
   TenantRegistration,
 } from "@/features/registrations/types";
 import type { ListQuery, PaginatedResult } from "@/types/repository";
-import type { RegistrationStatus } from "@/types/status";
+import type { RegistrationCheckType, RegistrationStatus } from "@/types/status";
 
 export interface RegistrationListQuery extends ListQuery {
   readonly status?: RegistrationStatus;
@@ -18,6 +18,21 @@ export interface NewRegistration {
   readonly region: string;
   readonly requestedPlanId: string | null;
 }
+
+/** One reviewer verdict on one checklist item. */
+export interface RegistrationCheckDecision {
+  readonly registrationId: string;
+  readonly checkType: RegistrationCheckType;
+  /** Only a verdict: a check cannot be pushed back to "pending". */
+  readonly status: "passed" | "failed";
+  readonly notes: string | null;
+  /** The administrator recording it, stored in `checked_by`. */
+  readonly reviewerId: string;
+}
+
+export type RecordCheckOutcome =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: "not-found" | "not-pending" };
 
 export interface RegistrationRepository {
   findById(id: string): Promise<TenantRegistration | null>;
@@ -34,4 +49,11 @@ export interface RegistrationRepository {
    * Returns the generated registration code.
    */
   create(values: NewRegistration): Promise<string>;
+  /**
+   * Records a reviewer's verdict on one checklist item.
+   *
+   * Refused once the registration itself has been decided: the checklist is the
+   * evidence for that decision, so it must not change afterwards.
+   */
+  recordCheck(decision: RegistrationCheckDecision): Promise<RecordCheckOutcome>;
 }
