@@ -48,17 +48,33 @@ export function deriveDatabaseName(subdomain: string): string {
   return `sp_tenant_${subdomain.replace(/-/g, "_")}`.slice(0, 150);
 }
 
+/** The tenant site's path on the platform, e.g. "/acme-corp". */
+export function tenantPath(subdomain: string): string {
+  return `/${subdomain}`;
+}
+
 /**
  * The tenant's public site URL.
  *
- * Null when no root domain is configured: an unroutable URL on the tenants list
- * is worse than an honest blank, and the row action already says "No site URL
- * on file".
+ * The path form wins when the platform origin is known, because that is the
+ * route the application actually serves: `/[tenant]` resolves, and it carries
+ * the right scheme and port by construction. The host form
+ * (`acme.example.com`) is recorded only when there is no origin to build a path
+ * from — it needs wildcard DNS and a proxy that maps the host back to this
+ * route, neither of which this application provides.
+ *
+ * Null only when neither is available. An unroutable URL on the tenants list is
+ * worse than an honest blank.
  */
 export function buildWebsiteUrl(
   subdomain: string,
   rootDomain: string,
+  appUrl = "",
 ): string | null {
+  const base = appUrl.trim().replace(/\/+$/, "");
+
+  if (base !== "") return `${base}${tenantPath(subdomain)}`;
+
   const root = rootDomain.trim().toLowerCase();
   return root === "" ? null : `https://${subdomain}.${root}`;
 }

@@ -43,6 +43,9 @@ async function main(): Promise<void> {
 
   // ---- provisioning against Postgres --------------------------------------
   const root = process.env.TENANT_ROOT_DOMAIN ?? "";
+  // Tenant sites are served from the platform's own root, so the recorded URL
+  // is the path form. See buildWebsiteUrl.
+  const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const stamp = Date.now();
   const businessName = `Verify Provision ${stamp}`;
   const email = `verify-prov-${stamp}@example.test`;
@@ -83,6 +86,7 @@ async function main(): Promise<void> {
     priceSnapshot: expectedPlan.monthlyPrice,
     currency: expectedPlan.currency,
     rootDomain: root,
+    appUrl: APP_URL,
     region: "North America",
   });
 
@@ -103,7 +107,7 @@ async function main(): Promise<void> {
   check(created.subdomain, deriveSubdomain(businessName), "subdomain assigned");
   check(
     created.websiteUrl,
-    buildWebsiteUrl(created.subdomain ?? "", root),
+    buildWebsiteUrl(created.subdomain ?? "", root, APP_URL),
     "website url assigned",
   );
   // A workspace whose database does not exist yet is on trial, never active.
@@ -144,6 +148,7 @@ async function main(): Promise<void> {
     priceSnapshot: expectedPlan.monthlyPrice,
     currency: expectedPlan.currency,
     rootDomain: root,
+    appUrl: APP_URL,
     region: "North America",
   });
   check(second.ok, false, "second approval refused");

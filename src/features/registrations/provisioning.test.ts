@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildWebsiteUrl,
+  tenantPath,
   deriveDatabaseName,
   deriveSubdomain,
   formatTenantCode,
@@ -81,22 +82,43 @@ describe("deriveDatabaseName", () => {
 });
 
 describe("buildWebsiteUrl", () => {
-  it("builds an https URL under the root domain", () => {
+  it("addresses the tenant on the platform itself", () => {
+    expect(buildWebsiteUrl("acme", "", "http://localhost:3000")).toBe(
+      "http://localhost:3000/acme",
+    );
+    expect(buildWebsiteUrl("acme", "   ", "http://localhost:3000/")).toBe(
+      "http://localhost:3000/acme",
+    );
+  });
+
+  it("prefers the path form over a configured root domain", () => {
+    // `/[tenant]` is the route this application serves. The host form needs
+    // wildcard DNS and a proxy that neither dev nor this app provides, so
+    // recording it would name an address that does not answer.
+    expect(
+      buildWebsiteUrl("acme", "example.com", "http://localhost:3000"),
+    ).toBe("http://localhost:3000/acme");
+  });
+
+  it("falls back to the host form when there is no platform origin", () => {
     expect(buildWebsiteUrl("acme", "example.com")).toBe(
       "https://acme.example.com",
     );
-  });
-
-  it("returns null when no root domain is configured", () => {
-    // An unroutable URL on the tenants list is worse than an honest blank.
-    expect(buildWebsiteUrl("acme", "")).toBeNull();
-    expect(buildWebsiteUrl("acme", "   ")).toBeNull();
-  });
-
-  it("lower-cases the root domain", () => {
     expect(buildWebsiteUrl("acme", "Example.COM")).toBe(
       "https://acme.example.com",
     );
+  });
+
+  it("returns null when neither address can be built", () => {
+    // An unroutable URL on the tenants list is worse than an honest blank.
+    expect(buildWebsiteUrl("acme", "")).toBeNull();
+    expect(buildWebsiteUrl("acme", "   ", "  ")).toBeNull();
+  });
+});
+
+describe("tenantPath", () => {
+  it("addresses a tenant site from the application root", () => {
+    expect(tenantPath("acme-corp")).toBe("/acme-corp");
   });
 });
 

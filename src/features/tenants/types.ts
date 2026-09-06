@@ -69,6 +69,26 @@ export interface TenantMetrics {
   readonly whatsappStatus: WhatsappConnectionStatus | null;
 }
 
+/**
+ * A registration awaiting review, shown on screen 02 as a pending row.
+ *
+ * Not a tenant, and deliberately a separate type. An application has no tenant
+ * code, no plan it is actually on and no database; giving it a `Tenant` shape
+ * would mean inventing those or leaving a tenant half-null everywhere it is
+ * read. It becomes a tenant when it is approved, and not before.
+ */
+export interface PendingTenantApplication {
+  readonly registrationId: string;
+  readonly registrationCode: string;
+  readonly businessName: string;
+  readonly ownerName: string;
+  readonly ownerEmail: string;
+  readonly requestedPlanName: string | null;
+  readonly submittedAt: string;
+  readonly checksPassed: number;
+  readonly checksTotal: number;
+}
+
 /** One row of the tenants table (screen 02). */
 export interface TenantListItem {
   readonly tenant: Tenant;

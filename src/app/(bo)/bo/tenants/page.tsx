@@ -7,8 +7,10 @@ import { Card } from "@/components/ui/card";
 import { Pagination } from "@/components/ui/pagination";
 import { PLATFORM_PERMISSIONS } from "@/constants/permissions";
 import { ROUTES } from "@/constants/routes";
+import { countPassedChecks } from "@/features/registrations/types";
 import { TenantFilters } from "@/features/tenants/components/tenant-filters";
 import { TenantsTable } from "@/features/tenants/components/tenants-table";
+import type { PendingTenantApplication } from "@/features/tenants/types";
 import { hasPermission, requirePermission } from "@/server/auth/authorization";
 import { repositories } from "@/server/repositories";
 import {
@@ -61,7 +63,14 @@ export default async function TenantsPage({
     ? (whatsappParam as WhatsappConnectionStatus)
     : undefined;
 
-  const [result, plans] = await Promise.all([
+  // Applications belong on this screen: a sign-up is a tenant-to-be, and a
+  // queue nobody looks at is a queue nobody works. They are excluded only when
+  // a status filter asks for something they are not, and never on later pages,
+  // where they would repeat above every page of tenants.
+  const showPending =
+    offset === 0 && (status === undefined || status === "pending_review");
+
+  const [result, plans, applications] = await Promise.all([
     repositories.tenants.findMany({
       search: search || undefined,
       status,
@@ -71,7 +80,29 @@ export default async function TenantsPage({
       offset,
     }),
     repositories.plans.findAll(),
+    showPending
+      ? repositories.registrations.findMany({
+          status: "pending_review",
+          search: search || undefined,
+          limit: PAGE_SIZE,
+          offset: 0,
+        })
+      : null,
   ]);
+
+  const pending: readonly PendingTenantApplication[] = (
+    applications?.items ?? []
+  ).map((detail) => ({
+    registrationId: detail.registration.id,
+    registrationCode: detail.registration.registrationCode,
+    businessName: detail.registration.businessName,
+    ownerName: detail.registration.ownerName,
+    ownerEmail: detail.registration.ownerEmail,
+    requestedPlanName: detail.requestedPlanName,
+    submittedAt: detail.registration.submittedAt,
+    checksPassed: countPassedChecks(detail.checks),
+    checksTotal: detail.checks.length,
+  }));
 
   const hasFilters = Boolean(search || status || planCode || whatsapp);
 
@@ -122,6 +153,7 @@ export default async function TenantsPage({
         />
         <TenantsTable
           items={result.items}
+          pending={pending}
           hasFilters={hasFilters}
           canManage={canManage}
         />

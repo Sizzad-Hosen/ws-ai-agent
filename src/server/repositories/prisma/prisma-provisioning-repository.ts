@@ -7,12 +7,17 @@ import {
   formatTenantCode,
   withSuffix,
 } from "@/features/registrations/provisioning";
+import { isReservedTenantSlug } from "@/constants/reserved-slugs";
 import { prisma } from "@/server/db/prisma";
 import type {
+  DatabaseTarget,
   ProvisionInput,
   ProvisionOutcome,
   ProvisioningRepository,
 } from "@/server/repositories/contracts/provisioning-repository";
+import type { ProvisioningStatus } from "@/types/status";
+
+import { provisioningMap, provisioningToPrisma } from "./mappers";
 
 /** Attempts at a free host label before giving up. */
 const MAX_LABEL_ATTEMPTS = 25;
@@ -68,12 +73,13 @@ export class PrismaProvisioningRepository implements ProvisioningRepository {
 
         if (locked.count === 0) return null;
 
-        // Re-checked inside the transaction. The owner's email is the closest
-        // thing to an identity the ERD gives us, since tenants carry no
-        // registration_id (§2.5 / D-02). A unique index on the column is what
-        // actually makes this safe against two reviewers approving duplicate
-        // registrations at the same moment; this read only turns that
-        // constraint into an explanation instead of a raw violation.
+        // Re-checked inside the transaction. `tenants.registration_id` is
+        // unique, so one application cannot provision twice; the owner's email
+        // is the separate guard against two *different* applications from one
+        // owner. A unique index on the column is what actually makes this safe
+        // against two reviewers approving duplicate registrations at the same
+        // moment; this read only turns that constraint into an explanation
+        // instead of a raw violation.
         const existing = await tx.tenant.findUnique({
           where: { ownerEmail: registration.ownerEmail },
           select: { id: true },
@@ -94,8 +100,15 @@ export class PrismaProvisioningRepository implements ProvisioningRepository {
             ownerPhone: registration.ownerPhone,
             industry: registration.industry,
             region: registration.region,
+            // The application this tenant came from, so screen 04 can cite it
+            // (§2.5 / D-02) instead of leaving "Reg: …" blank.
+            registrationId: input.registrationId,
             subdomain,
-            websiteUrl: buildWebsiteUrl(subdomain, input.rootDomain),
+            websiteUrl: buildWebsiteUrl(
+              subdomain,
+              input.rootDomain,
+              input.appUrl,
+            ),
             // Trial rather than active: the workspace is not usable until its
             // database is actually provisioned.
             approvalStatus: "TRIAL",
@@ -174,6 +187,35 @@ export class PrismaProvisioningRepository implements ProvisioningRepository {
     }
   }
 
+  async setDatabaseStatus(
+    tenantId: string,
+    status: ProvisioningStatus,
+    schemaVersion?: string,
+  ): Promise<void> {
+    await prisma.tenantDatabase.updateMany({
+      where: { tenantId },
+      data: {
+        status: provisioningToPrisma[status],
+        ...(schemaVersion === undefined ? {} : { schemaVersion }),
+      },
+    });
+  }
+
+  async findDatabaseTarget(tenantId: string): Promise<DatabaseTarget | null> {
+    const row = await prisma.tenantDatabase.findUnique({
+      where: { tenantId },
+      select: { databaseName: true, status: true },
+    });
+
+    if (!row) return null;
+
+    return {
+      tenantId,
+      databaseName: row.databaseName,
+      status: provisioningMap[row.status],
+    };
+  }
+
   async rejectRegistration(registrationId: string): Promise<boolean> {
     const result = await prisma.tenantRegistration.updateMany({
       where: { id: registrationId, status: "PENDING_REVIEW" },
@@ -195,6 +237,12 @@ export class PrismaProvisioningRepository implements ProvisioningRepository {
   ): Promise<string> {
     for (let attempt = 1; attempt <= MAX_LABEL_ATTEMPTS; attempt += 1) {
       const candidate = withSuffix(base, attempt);
+
+      // A reserved slug is skipped, not rejected: the tenant site is served
+      // from the application root, so "pricing" would lose to the marketing
+      // route and simply never resolve.
+      if (isReservedTenantSlug(candidate)) continue;
+
       const taken = await tx.tenant.findUnique({
         where: { subdomain: candidate },
         select: { id: true },

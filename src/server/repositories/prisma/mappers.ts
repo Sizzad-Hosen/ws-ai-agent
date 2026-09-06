@@ -125,13 +125,41 @@ const checkStatusMap: Record<PrismaCheckStatus, RegistrationCheckStatus> = {
   [PrismaCheckStatus.FAILED]: "failed",
 };
 
-const provisioningMap: Record<PrismaTenantDatabaseStatus, ProvisioningStatus> =
+export const checkStatusToPrisma: Record<
+  RegistrationCheckStatus,
+  PrismaCheckStatus
+> = {
+  pending: PrismaCheckStatus.PENDING,
+  passed: PrismaCheckStatus.PASSED,
+  failed: PrismaCheckStatus.FAILED,
+};
+
+export const checkTypeToPrisma: Record<RegistrationCheckType, PrismaCheckType> =
   {
-    [PrismaTenantDatabaseStatus.PENDING]: "pending",
-    [PrismaTenantDatabaseStatus.PROVISIONING]: "provisioning",
-    [PrismaTenantDatabaseStatus.READY]: "ready",
-    [PrismaTenantDatabaseStatus.FAILED]: "failed",
+    business_verification: PrismaCheckType.BUSINESS_VERIFICATION,
+    payment_method_linked: PrismaCheckType.PAYMENT_METHOD_LINKED,
+    whatsapp_api_approval: PrismaCheckType.WHATSAPP_API_APPROVAL,
   };
+
+export const provisioningMap: Record<
+  PrismaTenantDatabaseStatus,
+  ProvisioningStatus
+> = {
+  [PrismaTenantDatabaseStatus.PENDING]: "pending",
+  [PrismaTenantDatabaseStatus.PROVISIONING]: "provisioning",
+  [PrismaTenantDatabaseStatus.READY]: "ready",
+  [PrismaTenantDatabaseStatus.FAILED]: "failed",
+};
+
+export const provisioningToPrisma: Record<
+  ProvisioningStatus,
+  PrismaTenantDatabaseStatus
+> = {
+  pending: PrismaTenantDatabaseStatus.PENDING,
+  provisioning: PrismaTenantDatabaseStatus.PROVISIONING,
+  ready: PrismaTenantDatabaseStatus.READY,
+  failed: PrismaTenantDatabaseStatus.FAILED,
+};
 
 const billingCycleMap: Record<PrismaBillingCycle, BillingCycle> = {
   [PrismaBillingCycle.MONTHLY]: "monthly",
@@ -176,7 +204,15 @@ export function mapAdmin(admin: PrismaAdminUser): PlatformAdmin {
   };
 }
 
-export function mapTenant(tenant: PrismaTenant): Tenant {
+/**
+ * @param registrationCode The code of the application this tenant came from,
+ * when the caller joined it. Passed rather than read off the row because
+ * `tenants` stores only the id, and not every query needs the join.
+ */
+export function mapTenant(
+  tenant: PrismaTenant,
+  registrationCode: string | null = null,
+): Tenant {
   return {
     id: tenant.id,
     tenantCode: tenant.tenantCode,
@@ -189,9 +225,7 @@ export function mapTenant(tenant: PrismaTenant): Tenant {
     websiteUrl: tenant.websiteUrl,
     approvalStatus: tenantApprovalMap[tenant.approvalStatus],
     createdAt: tenant.createdAt.toISOString(),
-    // The ERD has no tenants → tenant_registrations relationship, so the
-    // registration code shown on screen 04 has nothing to read (§2.5 / D-02).
-    registrationCode: null,
+    registrationCode,
   };
 }
 
@@ -305,9 +339,7 @@ export function mapRegistration(
     region: registration.region,
     requestedPlanId: registration.requestedPlanId,
     status: registrationStatusMap[registration.status],
-    // `tenant_registrations` has no created_at column in the ERD; the earliest
-    // check is the closest available proxy and the caller supplies it.
-    submittedAt: new Date(0).toISOString(),
+    submittedAt: registration.createdAt.toISOString(),
   };
 }
 

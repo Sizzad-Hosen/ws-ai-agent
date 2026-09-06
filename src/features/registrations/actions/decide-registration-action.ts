@@ -10,6 +10,7 @@ import { allChecksPassed } from "@/features/registrations/types";
 import { AUDIT_ACTIONS, recordAudit } from "@/server/audit/audit-log";
 import { requirePermission } from "@/server/auth/authorization";
 import { repositories } from "@/server/repositories";
+import { provisionDatabaseForTenant } from "@/server/services/provision-tenant-database";
 
 export interface RegistrationDecisionResult {
   readonly success: boolean;
@@ -22,6 +23,9 @@ export interface RegistrationDecisionResult {
     readonly websiteUrl: string | null;
     readonly databaseName: string;
     readonly planName: string;
+    /** Whether the physical database was created, and what to say if not. */
+    readonly databaseReady: boolean;
+    readonly databaseNote: string | null;
   };
 }
 
@@ -33,12 +37,14 @@ const inputSchema = z.object({
 /**
  * Approves or rejects a registration.
  *
- * Approval provisions: it creates the tenant, its database record and its
- * subscription in one transaction and marks the registration approved. Nothing
- * here creates an actual database — that is an infrastructure job — so the
- * database row is written PENDING and the tenant starts on TRIAL rather than
- * ACTIVE. Claiming ACTIVE for a workspace with no database would be a lie the
- * whole console then repeats.
+ * Approval provisions in two stages, because they cannot share a transaction.
+ * First the master records — tenant, database row, subscription — commit
+ * together or not at all: a tenant missing either is not half-finished, it is
+ * broken. Then the physical database is created and the row moves to READY or
+ * FAILED, since `CREATE DATABASE` cannot run inside a transaction.
+ *
+ * The tenant starts on TRIAL because its subscription genuinely is trialing,
+ * not because the workspace is incomplete.
  */
 export async function decideRegistrationAction(
   input: unknown,
@@ -121,6 +127,7 @@ export async function decideRegistrationAction(
     priceSnapshot: plan.monthlyPrice,
     currency: plan.currency,
     rootDomain: env.TENANT_ROOT_DOMAIN,
+    appUrl: env.NEXT_PUBLIC_APP_URL,
     region: detail.registration.region,
   });
 
@@ -130,6 +137,12 @@ export async function decideRegistrationAction(
       message: failureMessage(outcome.reason, detail.registration.businessName),
     };
   }
+
+  // The physical database, once the master transaction has committed. It runs
+  // here rather than inside that transaction because CREATE DATABASE cannot be
+  // transactional; a failure leaves the tenant in place with its database row
+  // marked FAILED, which the tenant detail screen surfaces and a retry fixes.
+  const database = await provisionDatabaseForTenant(outcome.tenant.tenantId);
 
   // Everything the approval created, so the trail explains the new tenant.
   await recordAudit({
@@ -147,6 +160,7 @@ export async function decideRegistrationAction(
       planName: plan.name,
       priceSnapshot: plan.monthlyPrice,
       currency: plan.currency,
+      databaseReady: database.ok,
     },
   });
 
@@ -155,8 +169,15 @@ export async function decideRegistrationAction(
 
   return {
     success: true,
-    message: `${detail.registration.businessName} approved and provisioned on the ${plan.name} plan.`,
-    provisioned: { ...outcome.tenant, planName: plan.name },
+    message: database.ok
+      ? `${detail.registration.businessName} approved and provisioned on the ${plan.name} plan.`
+      : `${detail.registration.businessName} approved on the ${plan.name} plan, but its database could not be created. The tenant exists and the database can be retried.`,
+    provisioned: {
+      ...outcome.tenant,
+      planName: plan.name,
+      databaseReady: database.ok,
+      databaseNote: database.ok ? null : database.reason,
+    },
   };
 }
 
