@@ -2,6 +2,7 @@ import "dotenv/config";
 
 import { toPlanValues } from "@/features/plans/schemas";
 import { toAiConfigurationSettings } from "@/features/ai-settings/schemas";
+import { prisma } from "@/server/db/prisma";
 import { repositories } from "@/server/repositories";
 
 async function main(): Promise<void> {
@@ -152,30 +153,42 @@ async function main(): Promise<void> {
   await repositories.siteSettings.save(settingsBefore);
 
   // ---- tenant lifecycle ---------------------------------------------------
-  const list = await repositories.tenants.findMany({ limit: 50, offset: 0 });
-  const target = list.items.find((i) => i.tenant.approvalStatus === "active");
+  // Its own tenant, not whichever one happens to exist: suspending a real
+  // workspace to prove that suspending works takes the workspace down.
+  const unique = `verify-writes-${Date.now().toString(36)}`;
+  const fixture = await prisma.tenant.create({
+    data: {
+      tenantCode: `TEN-VERIFY-${unique.slice(-12)}`,
+      businessName: "Verify Writes",
+      ownerName: "Verify Owner",
+      ownerEmail: `${unique}@example.test`,
+      ownerPhone: "+1 555 000 0000",
+      industry: "Testing",
+      region: "US-East-1",
+      subdomain: unique,
+      approvalStatus: "ACTIVE",
+    },
+    select: { id: true },
+  });
 
-  if (!target) {
-    throw new Error("Seed data has no active tenant to exercise.");
-  }
+  try {
+    await repositories.tenants.updateApprovalStatus(fixture.id, "suspended");
+    const suspended = await repositories.tenants.findById(fixture.id);
+    if (suspended?.approvalStatus !== "suspended") {
+      throw new Error("Tenant suspend did not persist.");
+    }
 
-  await repositories.tenants.updateApprovalStatus(
-    target.tenant.id,
-    "suspended",
-  );
-  const suspended = await repositories.tenants.findById(target.tenant.id);
-  if (suspended?.approvalStatus !== "suspended") {
-    throw new Error("Tenant suspend did not persist.");
-  }
-
-  await repositories.tenants.updateApprovalStatus(target.tenant.id, "active");
-  const restored = await repositories.tenants.findById(target.tenant.id);
-  if (restored?.approvalStatus !== "active") {
-    throw new Error("Tenant reactivate did not persist.");
+    await repositories.tenants.updateApprovalStatus(fixture.id, "active");
+    const restored = await repositories.tenants.findById(fixture.id);
+    if (restored?.approvalStatus !== "active") {
+      throw new Error("Tenant reactivate did not persist.");
+    }
+  } finally {
+    await prisma.tenant.delete({ where: { id: fixture.id } });
   }
 
   console.log(
-    "Plan create/update/delete, AI configuration, site settings and tenant lifecycle all verified against Postgres. Seed state restored.",
+    "Plan create/update/delete, AI configuration, site settings and tenant lifecycle all verified against Postgres. Fixtures removed, settings restored.",
   );
 }
 

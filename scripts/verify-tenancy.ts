@@ -1,5 +1,6 @@
 import "dotenv/config";
 
+import { prisma } from "@/server/db/prisma";
 import { repositories } from "@/server/repositories";
 import { tenantLabelFromHost } from "@/server/tenancy/host";
 import {
@@ -91,55 +92,97 @@ async function main(): Promise<void> {
   check(rejected, true, "malformed secret JSON is rejected");
 
   // ---- routing target lookup --------------------------------------------
-  const list = await repositories.tenants.findMany({ limit: 50, offset: 0 });
-  const active = list.items.find(
-    (item) => item.tenant.approvalStatus === "active",
-  );
+  // Fixtures are created here and removed at the end. The database seeds no
+  // tenants, and a routing check that only runs when someone happens to have
+  // approved one is not a check.
+  const [active, suspended] = await Promise.all([
+    createFixture("verify-routing-active", "ACTIVE", "READY"),
+    createFixture("verify-routing-suspended", "SUSPENDED", "READY"),
+  ]);
 
-  if (!active) throw new Error("Seed has no active tenant to route to.");
+  try {
+    const target = await repositories.tenants.findRoutingTargetBySubdomain(
+      active.subdomain,
+    );
 
-  const label = active.tenant.businessName
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  const target = await repositories.tenants.findRoutingTargetBySubdomain(label);
-
-  if (!target) {
-    throw new Error(`No routing target for seeded subdomain "${label}".`);
-  }
-  if (target.tenantId !== active.tenant.id) {
-    throw new Error("Subdomain resolved to the wrong tenant.");
-  }
-  if (target.secretReference === "") {
-    throw new Error("Routing target carries no secret reference.");
-  }
-
-  const missing =
-    await repositories.tenants.findRoutingTargetBySubdomain("no-such-tenant");
-  check(missing, null, "unknown subdomain resolves to null");
-
-  // A suspended tenant keeps its host but must not be servable from it.
-  const suspended = list.items.find(
-    (item) => item.tenant.approvalStatus === "suspended",
-  );
-
-  if (suspended) {
-    const suspendedLabel = suspended.tenant.businessName
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-    const suspendedTarget =
-      await repositories.tenants.findRoutingTargetBySubdomain(suspendedLabel);
-
-    if (suspendedTarget && suspendedTarget.approvalStatus !== "suspended") {
-      throw new Error("Suspended tenant did not report its status.");
+    if (!target) {
+      throw new Error(`No routing target for subdomain "${active.subdomain}".`);
     }
-  }
+    if (target.tenantId !== active.id) {
+      throw new Error("Subdomain resolved to the wrong tenant.");
+    }
+    if (target.secretReference === "") {
+      throw new Error("Routing target carries no secret reference.");
+    }
+    check(target.provisioned, true, "a READY database reports provisioned");
 
-  console.log(
-    `Tenancy verified: 15 host-parsing cases, secret provider policy, routing target for "${label}" -> ${target.databaseName} (provisioned: ${target.provisioned}).`,
-  );
+    const missing =
+      await repositories.tenants.findRoutingTargetBySubdomain("no-such-tenant");
+    check(missing, null, "unknown subdomain resolves to null");
+
+    // A suspended tenant keeps its host but must not be servable from it.
+    const suspendedTarget =
+      await repositories.tenants.findRoutingTargetBySubdomain(
+        suspended.subdomain,
+      );
+
+    if (!suspendedTarget) {
+      throw new Error("A suspended tenant lost its routing target entirely.");
+    }
+    check(
+      suspendedTarget.approvalStatus,
+      "suspended",
+      "suspended tenant reports its status",
+    );
+
+    console.log(
+      `Tenancy verified: 15 host-parsing cases, secret provider policy, routing target for "${active.subdomain}" -> ${target.databaseName} (provisioned: ${target.provisioned}), suspended host still resolves but reports suspended. Fixtures removed.`,
+    );
+  } finally {
+    await prisma.tenant.deleteMany({
+      where: { id: { in: [active.id, suspended.id] } },
+    });
+  }
+}
+
+/** A tenant with a provisioned database, for the routing checks. */
+async function createFixture(
+  label: string,
+  approvalStatus: "ACTIVE" | "SUSPENDED",
+  databaseStatus: "READY" | "PENDING",
+): Promise<{ readonly id: string; readonly subdomain: string }> {
+  const unique = `${label}-${Date.now().toString(36)}`;
+  const databaseName = `sp_tenant_${unique.replace(/-/g, "_")}`;
+
+  // The database row cascades with the tenant, so cleanup is one delete.
+  const tenant = await prisma.tenant.create({
+    data: {
+      tenantCode: `TEN-VERIFY-${unique.slice(-12)}`,
+      businessName: `Verify ${label}`,
+      ownerName: "Verify Owner",
+      ownerEmail: `${unique}@example.test`,
+      ownerPhone: "+1 555 000 0000",
+      industry: "Testing",
+      region: "US-East-1",
+      subdomain: unique,
+      approvalStatus,
+      database: {
+        create: {
+          databaseName,
+          hostReference: `secret://${databaseName}/host`,
+          port: 5432,
+          usernameReference: `secret://${databaseName}/username`,
+          secretReference: `secret://${databaseName}/password`,
+          status: databaseStatus,
+          schemaVersion: "0",
+          region: "US-East-1",
+        },
+      },
+    },
+    select: { id: true, subdomain: true },
+  });
+
+  return { id: tenant.id, subdomain: tenant.subdomain! };
 }
 
 main().catch((error: unknown) => {
