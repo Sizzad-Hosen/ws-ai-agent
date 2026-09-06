@@ -6,7 +6,7 @@ import { RegisterForm } from "@/features/public-site/components/register-form";
 export const metadata: Metadata = {
   title: "Start free",
   description:
-    "Create your SellPilot AI workspace. Applications are reviewed before provisioning; no card required.",
+    "Create your Ordivex workspace. Applications are reviewed before provisioning; no card required.",
 };
 
 const ASSURANCES = [

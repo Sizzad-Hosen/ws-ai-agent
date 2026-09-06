@@ -99,7 +99,7 @@ export default function PublicHomePage() {
 
       <PsSection tone="panel">
         <PsSectionHeading
-          title="Why Top Sales Teams Choose SellPilot"
+          title="Why Top Sales Teams Choose Ordivex"
           description="Automate the busywork and focus on closing high-value deals with enterprise-grade reliability."
         />
 
