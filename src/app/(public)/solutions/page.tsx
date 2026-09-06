@@ -21,7 +21,7 @@ import {
 export const metadata: Metadata = {
   title: "Tailored AI for every industry",
   description:
-    "How SellPilot AI adapts to your vertical, delivering precision-led autonomous sales experiences that resonate with your customers.",
+    "How Ordivex adapts to your vertical, delivering precision-led autonomous sales experiences that resonate with your customers.",
 };
 
 /** `id` doubles as the anchor target used by the footer links. */
@@ -73,9 +73,9 @@ export default function SolutionsPage() {
             Tailored AI for Every Industry
           </h1>
           <p className="text-ps-ink-muted text-lead mt-6 text-pretty">
-            Discover how SellPilot AI adapts to your specific vertical,
-            delivering precision-led autonomous sales experiences that resonate
-            with your customers.
+            Discover how Ordivex adapts to your specific vertical, delivering
+            precision-led autonomous sales experiences that resonate with your
+            customers.
           </p>
         </div>
 
@@ -118,8 +118,8 @@ export default function SolutionsPage() {
             Don&apos;t see your industry?
           </h2>
           <p className="text-ps-ink-muted text-copy mx-auto mt-4 max-w-xl text-pretty">
-            SellPilot AI&apos;s flexible architecture allows it to learn and
-            adapt to virtually any complex sales environment.
+            Ordivex&apos;s flexible architecture allows it to learn and adapt to
+            virtually any complex sales environment.
           </p>
           <PsButton asChild variant="secondary" className="bg-ps-panel mt-8">
             <Link href={ROUTES.public.register}>Talk to Sales Engineering</Link>

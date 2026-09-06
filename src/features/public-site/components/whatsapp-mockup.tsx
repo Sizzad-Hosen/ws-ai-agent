@@ -74,7 +74,7 @@ export function WhatsappMockup({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-ps-ink truncate text-sm font-semibold">
-            SellPilot Assistant
+            Ordivex Assistant
           </p>
           <p className="text-ps-brand-deep flex items-center gap-1.5 text-xs">
             <span

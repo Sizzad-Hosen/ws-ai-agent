@@ -21,7 +21,7 @@ import {
 export const metadata: Metadata = {
   title: "Intelligent sales workflow",
   description:
-    "How SellPilot AI autonomously manages conversations, discovers products, and closes deals with unparalleled precision.",
+    "How Ordivex autonomously manages conversations, discovers products, and closes deals with unparalleled precision.",
 };
 
 const STEPS = [
@@ -33,7 +33,7 @@ const STEPS = [
   {
     step: "02",
     title: "Sync",
-    body: "SellPilot instantly ingests your product catalog, pricing, and availability.",
+    body: "Ordivex instantly ingests your product catalog, pricing, and availability.",
   },
   {
     step: "03",
@@ -89,8 +89,8 @@ export default function HowItWorksPage() {
             Intelligent Sales Workflow
           </h1>
           <p className="text-ps-ink-muted text-lead mt-6 text-pretty">
-            Discover how SellPilot AI autonomously manages conversations,
-            discovers products, and closes deals with unparalleled precision.
+            Discover how Ordivex autonomously manages conversations, discovers
+            products, and closes deals with unparalleled precision.
           </p>
         </div>
 

@@ -2,7 +2,7 @@ import { Bell, CircleQuestionMark, History, Menu, Search } from "lucide-react";
 
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { APP_CONFIG } from "@/config/app";
+import { APP_CONFIG, APP_MARK } from "@/config/app";
 import type { BoSessionAdmin } from "@/server/auth/types";
 
 interface BoHeaderProps {
@@ -16,7 +16,7 @@ export function BoHeader({ admin, notificationCount = 0 }: BoHeaderProps) {
     <header className="bg-card border-border sticky top-0 z-20 flex h-16 items-center gap-4 border-b px-4 sm:px-6">
       <div className="flex items-center gap-3 md:hidden">
         <span className="bg-primary grid size-8 place-items-center rounded-md text-sm font-bold text-white">
-          S
+          {APP_MARK}
         </span>
         <span className="sr-only">{APP_CONFIG.name}</span>
       </div>

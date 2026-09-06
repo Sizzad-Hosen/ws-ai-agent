@@ -54,8 +54,8 @@ export default async function PricingPage() {
             Ready to automate your revenue?
           </h2>
           <p className="text-copy mx-auto mt-4 max-w-2xl text-pretty text-white/70">
-            Join thousands of high-growth companies using SellPilot AI to
-            convert leads 24/7 without adding headcount.
+            Join thousands of high-growth companies using Ordivex to convert
+            leads 24/7 without adding headcount.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <PsButton asChild variant="onDark" size="lg">

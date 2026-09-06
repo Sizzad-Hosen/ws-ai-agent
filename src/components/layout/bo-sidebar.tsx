@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CircleQuestionMark, Settings } from "lucide-react";
 
-import { APP_CONFIG } from "@/config/app";
+import { APP_CONFIG, APP_MARK } from "@/config/app";
 import { BO_NAVIGATION, type NavigationItem } from "@/config/bo-navigation";
 import { ROUTES } from "@/constants/routes";
 import { cn } from "@/lib/utils";
@@ -33,7 +33,7 @@ export function BoSidebar({ allowedHrefs }: BoSidebarProps) {
     <aside className="bg-sidebar hidden w-60 shrink-0 flex-col md:flex">
       <div className="border-sidebar-border flex h-16 items-center gap-3 border-b px-5">
         <span className="bg-primary grid size-8 shrink-0 place-items-center rounded-md text-sm font-bold text-white">
-          S
+          {APP_MARK}
         </span>
         <span className="min-w-0">
           <span className="text-sidebar-foreground-strong block truncate text-sm font-semibold">

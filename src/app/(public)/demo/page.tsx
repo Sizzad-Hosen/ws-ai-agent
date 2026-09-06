@@ -8,7 +8,7 @@ import { PsButton } from "@/features/public-site/components/ui";
 export const metadata: Metadata = {
   title: "Live intent & automation demo",
   description:
-    "Watch SellPilot AI interpret natural language on WhatsApp, check backend inventory in real time, and orchestrate the checkout flow.",
+    "Watch Ordivex interpret natural language on WhatsApp, check backend inventory in real time, and orchestrate the checkout flow.",
 };
 
 export default function DemoPage() {
@@ -20,9 +20,9 @@ export default function DemoPage() {
             Live Intent &amp; Automation Demo
           </h1>
           <p className="text-ps-ink-muted text-lead mt-6 text-pretty">
-            Watch as SellPilot AI interprets natural language on WhatsApp,
-            checks backend inventory in real-time, and orchestrates the entire
-            checkout flow autonomously.
+            Watch as Ordivex interprets natural language on WhatsApp, checks
+            backend inventory in real-time, and orchestrates the entire checkout
+            flow autonomously.
           </p>
         </div>
 

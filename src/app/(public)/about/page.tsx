@@ -67,24 +67,24 @@ export default function AboutPage() {
               Our Story
             </h2>
             <p className="text-ps-ink-muted mt-6 leading-relaxed">
-              SellPilot AI was born from a simple observation: sales
-              professionals spend too much time on repetitive tasks and not
-              enough time selling. We saw talented individuals bogged down by
-              data entry, follow-up sequencing, and pipeline management.
+              Ordivex was born from a simple observation: sales professionals
+              spend too much time on repetitive tasks and not enough time
+              selling. We saw talented individuals bogged down by data entry,
+              follow-up sequencing, and pipeline management.
             </p>
             <p className="text-ps-ink-muted mt-4 leading-relaxed">
               Our founders, veterans of both high-growth sales teams and
               advanced machine learning labs, set out to create a solution. By
-              automating the operational friction, SellPilot AI restores the
-              human element to sales, allowing teams to operate with
-              unprecedented efficiency and composed confidence.
+              automating the operational friction, Ordivex restores the human
+              element to sales, allowing teams to operate with unprecedented
+              efficiency and composed confidence.
             </p>
           </div>
 
           <div
             className="bg-ps-panel-soft border-ps-edge rounded-card aspect-[4/3] border"
             role="img"
-            aria-label="Placeholder for a photograph of the SellPilot team"
+            aria-label="Placeholder for a photograph of the Ordivex team"
           />
         </div>
       </PsSection>

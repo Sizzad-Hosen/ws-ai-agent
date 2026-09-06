@@ -1,5 +1,5 @@
 ---
-name: SellPilot AI
+name: Ordivex
 colors:
   surface: "#f8f9fa"
   surface-dim: "#d9dadb"
