@@ -17,9 +17,11 @@
 // are chosen here and commented where the reason is not obvious.
 //
 // Still NOT in this schema because they are not in the ERD, and remain open in
-// docs/IMPLEMENTATION_PLAN.md: platform_audit_logs (§2.3), the
-// admin_users → admin_roles FK (§2.4), tenants.registration_id (§2.5), and the
-// WhatsApp / usage-rollup / message-log tables (§2.2).
+// docs/IMPLEMENTATION_PLAN.md: the admin_users → admin_roles FK (§2.4) and the
+// WhatsApp / usage-rollup / message-log tables (§2.2). Added beyond the ERD
+// where a screen could not otherwise be honest: platform_audit_logs (§2.3),
+// tenants.registration_id (§2.5 / D-02) and tenant_registrations.created_at
+// (D-34).
 
 generator client {
   provider        = "prisma-client-js"
@@ -277,13 +279,22 @@ model TenantRegistration {
   region           String             @db.VarChar(80)
   requestedPlanId  String?            @map("requested_plan_id") @db.Uuid
   status           RegistrationStatus @default(PENDING_REVIEW)
+  /// Not on the ERD. Without it screen 03 has no sign-up date and no stable
+  /// order, so the newest application does not reliably reach the top of the
+  /// review queue. The earliest completed check used to stand in, which is
+  /// null for every registration that has not been reviewed yet.
+  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
 
   // Restrict: a plan referenced by a pending registration must not vanish.
   requestedPlan Plan?                     @relation(fields: [requestedPlanId], references: [id], onDelete: Restrict)
   checks        TenantRegistrationCheck[]
+  /// The tenant this application provisioned, once approved.
+  tenant        Tenant?
 
   @@index([status])
   @@index([requestedPlanId])
+  // Serves the review queue's newest-first ordering.
+  @@index([createdAt])
   @@map("tenant_registrations")
 }
 
@@ -328,7 +339,16 @@ model Tenant {
   subdomain      String?              @unique @db.VarChar(63)
   approvalStatus TenantApprovalStatus @default(PENDING_REVIEW) @map("approval_status")
   createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// The application this tenant was provisioned from. Not in the ERD, which
+  /// models no relationship in either direction, so screen 04's "Reg: …" had
+  /// nothing to read (§2.5 / D-02). Nullable because a tenant may also be
+  /// created directly, bypassing registration; unique because one application
+  /// provisions at most one tenant.
+  registrationId String?              @unique @map("registration_id") @db.Uuid
 
+  /// SetNull, not Cascade: deleting an application must never delete the live
+  /// tenant it produced. The tenant simply stops citing a registration.
+  registration  TenantRegistration? @relation(fields: [registrationId], references: [id], onDelete: SetNull)
   database      TenantDatabase?
   subscriptions Subscription[]
   invoices      Invoice[]

@@ -147,7 +147,7 @@ The ERD contains `admin_users.role` (an enum) **and** a full RBAC triple `admin_
 ### 2.5 Problem 5 (medium): tenant ↔ registration link is missing
 
 Screen 04 shows `Reg: REG-99281` on an approved **tenant**, but `tenants` has no `registration_id` and `tenant_registrations` has no `tenant_id`. The relationship the UI displays is not modelled.
-**Minimum change:** add `tenants.registration_id UUID unique nullable FK → tenant_registrations.id`. Nullable because screens also offer "Create Tenant" directly, bypassing registration. **Awaiting approval — see D-02.**
+**Minimum change:** add `tenants.registration_id UUID unique nullable FK → tenant_registrations.id`. Nullable because screens also offer "Create Tenant" directly, bypassing registration. **Resolved — column added**, migration `20260906160000_add_tenant_registration_id`, `ON DELETE SET NULL` so removing an application never removes the live tenant it produced.
 
 ### 2.6 Problem 6 (medium): every enum in the ERD is undefined
 
@@ -194,11 +194,14 @@ into a comment in `prisma/schema.prisma` at the point it applies.
 Consequences now visible in the running console, all of them faithful to the
 ERD rather than worked around:
 
-- **Screen 04 shows no registration code.** `tenants` has no link to
-  `tenant_registrations` (§2.5 / D-02), so the field is omitted.
-- **Screen 03 shows no sign-up date.** `tenant_registrations` has no
-  `created_at`; the earliest completed check stands in, and the field reads
-  "—" until one exists — see **D-34**.
+- **Screen 04 now shows the registration code.** `tenants.registration_id`
+  carries the link (§2.5 / D-02, resolved); provisioning sets it, and the
+  tenants list cites it under the tenant code. Null — and omitted — for a
+  tenant created directly rather than from an application.
+- **Screen 03 now shows a real sign-up date.** `tenant_registrations` gained a
+  `created_at` column — see **D-34**, resolved. The earliest completed check
+  used to stand in, which is null on every unreviewed registration, so a
+  brand-new application read "—"; the queue also had no arrival order.
 - **Screen 09 shows no key fingerprint.** `secret_reference` is a pointer into
   a secret manager and is never selected into a DTO, so there is nothing to
   fingerprint. This is the correct outcome for S-01.
@@ -417,6 +420,12 @@ says so.
 
 Export is unimplemented on four screens; those buttons are disabled rather than
 inert.
+
+Screen 03's checklist records a **reviewer's** verdict, not an automated one.
+`recordCheckAction` writes `checked_by` / `checked_at` and the card says so —
+nothing contacts a company registry, a payment processor or Meta, so the
+`refreshCheckStatusAction` in the M3 table below remains unbuilt. Claiming an
+external system had verified a business would be a fabrication.
 
 `tenant_registrations.owner_email` has no partial unique index, so two
 simultaneous applications from one address can both queue. Only one can ever
@@ -652,7 +661,8 @@ Cross-cutting rules for every module: read the relevant guide under `node_module
 | —      | Server Component `/bo/registrations`      | List pending registrations                     | `tenants:read`   |
 | —      | Server Component `/bo/registrations/[id]` | Review detail (screen 03)                      | `tenants:read`   |
 | Action | `recordCheckAction`                       | Set a checklist item's outcome                 | `tenants:manage` |
-| Action | `refreshCheckStatusAction`                | "Check Status" on WhatsApp API Approval        | `tenants:manage` |
+| Action | `recordCheckAction`                       | Records a reviewer verdict on one checklist item | `tenants:manage` |
+| Action | `refreshCheckStatusAction`                | Automated re-check against an external system — **not built**, no such system exists | `tenants:manage` |
 | Action | `approveRegistrationAction`               | Approve → create tenant → enqueue provisioning | `tenants:manage` |
 | Action | `rejectRegistrationAction`                | Reject with reason                             | `tenants:manage` |
 
@@ -1081,7 +1091,7 @@ Ordered by what blocks the most work. Nothing below is assumed.
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **D-00** | **Approve or reject the section 2.1 reconciliation.** Specifically: (a) is the ERD authoritative over the committed Prisma schema? (b) may `prisma/migrations/` be regenerated as a single baseline — i.e. does any environment hold data worth keeping? (c) of the 10 Prisma-only models, which are kept and added to the ERD, and which are dropped?                                                                                                                                                                                                                                                      |
 | **D-01** | Authorization model (2.4): RBAC tables + `admin_users.role_id`, or the `admin_users.role` enum alone? If RBAC, may we add the missing FK?                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| **D-02** | May we add `tenants.registration_id` (2.5)? Screen 04 displays a registration code on a tenant with no relationship to carry it                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ~~**D-02**~~ | **Resolved: column added.** `tenants.registration_id`, unique, nullable, `ON DELETE SET NULL`. Set by provisioning when an approval creates the tenant. Screen 04 and the tenants list cite it; null for a directly created tenant.                                                                                                                                                                                                                                                                                                                                                                    |
 | **D-03** | **Define all 12 enums.** Evidenced by the screens: `tenants.approval_status` → Active / Trial / Suspended (screen 02) + Pending Review (screen 03); `tenant_registration_checks.check_type` → Business Verification / Payment Method Linked / WhatsApp API Approval (screen 03); `subscriptions.billing_cycle` → Monthly / Annual (screen 06). **No evidence at all** for: `admin_users.role`, `admin_users.status`, `tenant_registrations.status`, `tenant_registration_checks.status`, `tenant_databases.status`, `subscriptions.status`, `invoices.status`, `ai_providers.status`, `public_pages.status` |
 | **D-04** | `subscriptions.price_snapshot` is NOT NULL, but Enterprise is priced "Custom" (2.7). Make it nullable, or add a negotiated-price field?                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **D-05** | Confirm the versioned JSON Schema for `plans.features` (2.8), including how "Unlimited" and "Custom" are encoded (proposal: `null`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -1123,7 +1133,7 @@ Ordered by what blocks the most work. Nothing below is assumed.
 | **D-31** | **Which navigation IA is correct?** The mocks contain two (§3.7), and `src/constants/routes.ts` matches neither                                                                                                      |
 | **D-32** | `public_pages`, `public_faqs` and `public_site_settings` exist in the ERD but no BO screen manages them (2.9h). Is public-site content management in scope?                                                          |
 | **D-33** | Are there PRD, System Design and API Design documents that were not committed? If so they supersede the inferences in this plan                                                                                      |
-| **D-34** | `tenant_registrations` has no `created_at`, but screen 03 shows "Signed up: Oct 24, 2023". Add the column, or drop the date from the screen? |
+| ~~**D-34**~~ | **Resolved: column added.** `tenant_registrations.created_at`, migration `20260906150000_add_registration_created_at`, backfilled from the earliest completed check. Screen 03 shows the date and the review queue orders newest-first. |
 
 ---
 
@@ -1139,8 +1149,8 @@ screens render; `lint`, `typecheck`, `build` and `format:check` pass.
    source. Until then M9 – M12 stay on mock adapters, and nine columns and
    panels across screens 01, 02, 04 and 09 read "—".
 2. **D-11** — decide where the message log lives (164M rows/yr).
-3. **D-02, D-34** — the two small `tenant_registrations` / `tenants` columns that
-   screens 03 and 04 display but the schema cannot supply.
+3. ~~**D-02**, **D-34**~~ — both resolved; `tenants` and `tenant_registrations`
+   now carry the two columns screens 03 and 04 display.
 4. **D-04** — `subscriptions.price_snapshot` is NOT NULL, so no tenant can be
    subscribed to a negotiated "Custom" plan.
 5. **D-09** — confirm the occluded `invoices` column is `paid_at`.

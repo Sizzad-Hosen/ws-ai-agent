@@ -1,10 +1,14 @@
+import type { ProvisioningStatus } from "@/types/status";
+
 export interface ProvisionInput {
   readonly registrationId: string;
   readonly planId: string;
   readonly priceSnapshot: string;
   readonly currency: string;
-  /** Root domain for the tenant's site URL; empty leaves it unset. */
+  /** Root domain for host-based tenant sites; empty selects path addressing. */
   readonly rootDomain: string;
+  /** Platform origin, used when tenant sites are served from its own root. */
+  readonly appUrl: string;
   /** Region recorded on the tenant's database row. */
   readonly region: string;
 }
@@ -43,4 +47,27 @@ export interface ProvisioningRepository {
   provisionApprovedTenant(input: ProvisionInput): Promise<ProvisionOutcome>;
   /** Marks a pending registration rejected. Returns false if it was not pending. */
   rejectRegistration(registrationId: string): Promise<boolean>;
+  /**
+   * Records where a tenant's physical database got to.
+   *
+   * Separate from {@link provisionApprovedTenant} because creating a database
+   * is not something a transaction can hold: `CREATE DATABASE` cannot run
+   * inside one, and it happens on a different connection to a different
+   * server. The master row therefore states the intent first and the outcome
+   * second, and a tenant whose database never arrives is FAILED rather than
+   * silently absent.
+   */
+  setDatabaseStatus(
+    tenantId: string,
+    status: ProvisioningStatus,
+    schemaVersion?: string,
+  ): Promise<void>;
+  /** The database row for a tenant, for a retry after a failed provision. */
+  findDatabaseTarget(tenantId: string): Promise<DatabaseTarget | null>;
+}
+
+export interface DatabaseTarget {
+  readonly tenantId: string;
+  readonly databaseName: string;
+  readonly status: ProvisioningStatus;
 }

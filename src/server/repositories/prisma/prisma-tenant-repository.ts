@@ -10,6 +10,7 @@ import type {
   TenantListQuery,
   TenantRepository,
   TenantRoutingTarget,
+  TenantSite,
 } from "@/server/repositories/contracts/tenant-repository";
 import type { PaginatedResult } from "@/types/repository";
 import type { TenantApprovalStatus as DomainTenantApprovalStatus } from "@/types/status";
@@ -18,6 +19,7 @@ import {
   mapPlan,
   mapTenant,
   mapTenantDatabase,
+  provisioningMap,
   tenantApprovalMap,
   tenantApprovalToPrisma,
 } from "./mappers";
@@ -73,12 +75,58 @@ export class PrismaTenantRepository implements TenantRepository {
     return tenant ? mapTenant(tenant) : null;
   }
 
+  async findSiteBySubdomain(subdomain: string): Promise<TenantSite | null> {
+    const tenant = await prisma.tenant.findUnique({
+      where: { subdomain },
+      // An explicit select, not an include: this row is rendered for anonymous
+      // visitors, so the columns it may not carry are excluded here rather than
+      // filtered later.
+      select: {
+        id: true,
+        businessName: true,
+        subdomain: true,
+        ownerName: true,
+        ownerPhone: true,
+        industry: true,
+        region: true,
+        approvalStatus: true,
+        createdAt: true,
+        database: { select: { status: true } },
+        subscriptions: {
+          where: { cancelledAt: null },
+          orderBy: { startedAt: Prisma.SortOrder.desc },
+          take: 1,
+          select: { plan: { select: { name: true } } },
+        },
+      },
+    });
+
+    if (!tenant?.subdomain) return null;
+
+    return {
+      tenantId: tenant.id,
+      businessName: tenant.businessName,
+      slug: tenant.subdomain,
+      industry: tenant.industry,
+      region: tenant.region,
+      ownerName: tenant.ownerName,
+      whatsappNumber: tenant.ownerPhone,
+      planName: tenant.subscriptions[0]?.plan.name ?? null,
+      approvalStatus: tenantApprovalMap[tenant.approvalStatus],
+      databaseStatus: tenant.database
+        ? provisioningMap[tenant.database.status]
+        : null,
+      since: tenant.createdAt.toISOString(),
+    };
+  }
+
   async findDetailById(id: string): Promise<TenantDetail | null> {
     const tenant = await prisma.tenant.findUnique({
       where: { id },
       include: {
         database: true,
         subscriptions: CURRENT_SUBSCRIPTION,
+        registration: { select: { registrationCode: true } },
       },
     });
 
@@ -89,7 +137,7 @@ export class PrismaTenantRepository implements TenantRepository {
     const subscription = tenant.subscriptions[0];
 
     return {
-      tenant: mapTenant(tenant),
+      tenant: mapTenant(tenant, tenant.registration?.registrationCode ?? null),
       planName: subscription ? mapPlan(subscription.plan).name : null,
       subscribedAt: subscription?.startedAt.toISOString() ?? null,
       infrastructure: {
@@ -161,7 +209,10 @@ export class PrismaTenantRepository implements TenantRepository {
       skip: offset,
       take: limit,
       orderBy: { createdAt: Prisma.SortOrder.desc },
-      include: { subscriptions: CURRENT_SUBSCRIPTION },
+      include: {
+        subscriptions: CURRENT_SUBSCRIPTION,
+        registration: { select: { registrationCode: true } },
+      },
     });
     const total = await prisma.tenant.count({ where });
 
@@ -169,7 +220,10 @@ export class PrismaTenantRepository implements TenantRepository {
       const subscription = tenant.subscriptions[0];
 
       return {
-        tenant: mapTenant(tenant),
+        tenant: mapTenant(
+          tenant,
+          tenant.registration?.registrationCode ?? null,
+        ),
         planName: subscription ? subscription.plan.name : null,
         metrics: {
           // WhatsApp connection state comes from a registry that does not
