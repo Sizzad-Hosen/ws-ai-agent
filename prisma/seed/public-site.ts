@@ -10,7 +10,7 @@ export async function seedPublicSite(): Promise<void> {
       slug: "home",
       title: "Sell on WhatsApp while you sleep",
       content:
-        "SellPilot AI answers every lead on WhatsApp, qualifies them, and closes orders automatically.",
+        "Ordivex answers every lead on WhatsApp, qualifies them, and closes orders automatically.",
     },
     {
       slug: "how-it-works",
@@ -55,7 +55,7 @@ export async function seedPublicSite(): Promise<void> {
         status: PublicPageStatus.PUBLISHED,
         publishedAt: daysAgo(30),
         seoMetadata: {
-          title: `${page.title} | SellPilot AI`,
+          title: `${page.title} | Ordivex`,
           description: page.content.slice(0, 155),
         },
       },
@@ -108,12 +108,12 @@ export async function seedPublicSite(): Promise<void> {
   }
 
   const settings = [
-    { siteKey: "brand", value: { name: "SellPilot AI", primary: "#10B981" } },
+    { siteKey: "brand", value: { name: "Ordivex", primary: "#10B981" } },
     {
       siteKey: "contact",
       value: {
-        supportEmail: "support@sellpilot.ai",
-        salesEmail: "sales@sellpilot.ai",
+        supportEmail: "support@ordivex.ai",
+        salesEmail: "sales@ordivex.ai",
       },
     },
     {
