@@ -1,9 +1,12 @@
 import "server-only";
 
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@prisma/client";
+
+import { PrismaClient as TenantPrismaClient } from "@/generated/tenant";
 
 import { createSecretProvider, type SecretProvider } from "./secrets";
+
+export type { TenantPrismaClient };
 
 /**
  * Per-tenant database connections.
@@ -29,14 +32,14 @@ export interface TenantDatabaseTarget {
 }
 
 export type TenantConnection =
-  | { readonly ok: true; readonly prisma: PrismaClient }
+  | { readonly ok: true; readonly prisma: TenantPrismaClient }
   | { readonly ok: false; readonly reason: TenantConnectionFailure };
 
 export type TenantConnectionFailure =
   "not-provisioned" | "secret-unavailable" | "connect-failed";
 
 interface CacheEntry {
-  readonly prisma: PrismaClient;
+  readonly prisma: TenantPrismaClient;
   /** Fingerprint of the target; a changed host or secret invalidates the entry. */
   readonly signature: string;
   lastUsedAt: number;
@@ -58,6 +61,7 @@ function secretProvider(): SecretProvider {
   return (globalForTenancy.tenantSecrets ??= createSecretProvider(
     process.env.NODE_ENV ?? "development",
     process.env.TENANT_DB_SECRETS_JSON,
+    process.env.TENANT_PROVISIONER_DATABASE_URL ?? process.env.DATABASE_URL,
   ));
 }
 
@@ -150,7 +154,7 @@ export async function getTenantPrisma(
     return { ok: false, reason: "secret-unavailable" };
   }
 
-  const prisma = new PrismaClient({
+  const prisma = new TenantPrismaClient({
     adapter: new PrismaPg({
       connectionString: buildConnectionString(target, password),
       connectionTimeoutMillis: 10_000,

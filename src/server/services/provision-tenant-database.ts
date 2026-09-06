@@ -4,7 +4,9 @@ import { repositories } from "@/server/repositories";
 import {
   TENANT_SCHEMA_VERSION,
   provisionTenantDatabase,
+  provisionedConnection,
 } from "@/server/tenancy/provision-database";
+import { localSecretReference } from "@/server/tenancy/secrets";
 
 export type TenantDatabaseResult =
   | {
@@ -42,6 +44,20 @@ export async function provisionDatabaseForTenant(
   if (!outcome.ok) {
     await repositories.provisioning.setDatabaseStatus(tenantId, "failed");
     return { ok: false, reason: outcome.reason };
+  }
+
+  // The row described an intent while the database did not exist. It exists
+  // now, so the pointers are rewritten to name it: a host_reference reading
+  // "pending/us-east-1/acme" is not somewhere a connection can be opened.
+  const connection = provisionedConnection();
+
+  if (connection) {
+    await repositories.provisioning.setDatabaseConnection(tenantId, {
+      host: connection.host,
+      port: connection.port,
+      username: connection.username,
+      secretReference: localSecretReference(target.databaseName),
+    });
   }
 
   await repositories.provisioning.setDatabaseStatus(

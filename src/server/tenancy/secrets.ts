@@ -78,13 +78,85 @@ export class EnvSecretProvider implements SecretProvider {
   }
 }
 
+/**
+ * Scheme marking a database this deployment provisioned itself, on the same
+ * server and under the same account as the master database.
+ *
+ * A reference is still a reference: it names *which* credential is wanted, and
+ * the provider decides whether it can supply it. What it does not do is store
+ * one.
+ */
+const LOCAL_SCHEME = "local-provisioner://";
+
+export function localSecretReference(databaseName: string): string {
+  return `${LOCAL_SCHEME}${databaseName}`;
+}
+
+/**
+ * Development stand-in for co-located tenant databases.
+ *
+ * The provisioner creates tenant databases on the master server using the
+ * master account, so for those databases the credential is one this process
+ * already holds — reading it back from the provisioner connection string
+ * invents no new secret and stores nothing.
+ *
+ * Refused outside development, and refuses any reference that is not its own
+ * scheme, so it can never stand in for a real secret manager. A production
+ * deployment puts tenant databases somewhere else, under accounts this process
+ * has no credential for, which is the entire point.
+ */
+export class LocalProvisionerSecretProvider implements SecretProvider {
+  readonly name = "local-provisioner";
+
+  constructor(private readonly provisionerUrl: string) {}
+
+  async resolve(reference: string): Promise<string | null> {
+    if (!reference.startsWith(LOCAL_SCHEME)) return null;
+
+    try {
+      return decodeURIComponent(new URL(this.provisionerUrl).password) || null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+/** Tries each provider in turn; the first to resolve wins. */
+export class ChainedSecretProvider implements SecretProvider {
+  readonly name: string;
+
+  constructor(private readonly providers: readonly SecretProvider[]) {
+    this.name = providers.map((provider) => provider.name).join("+");
+  }
+
+  async resolve(reference: string): Promise<string | null> {
+    for (const provider of this.providers) {
+      const secret = await provider.resolve(reference);
+      if (secret !== null) return secret;
+    }
+
+    return null;
+  }
+}
+
 export function createSecretProvider(
   nodeEnv: string,
   rawSecrets: string | undefined,
+  provisionerUrl?: string,
 ): SecretProvider {
-  if (nodeEnv === "production" || !rawSecrets) {
+  if (nodeEnv === "production") {
     return new UnavailableSecretProvider();
   }
 
-  return new EnvSecretProvider(rawSecrets);
+  const providers: SecretProvider[] = [];
+
+  if (rawSecrets) providers.push(new EnvSecretProvider(rawSecrets));
+  if (provisionerUrl) {
+    providers.push(new LocalProvisionerSecretProvider(provisionerUrl));
+  }
+
+  if (providers.length === 0) return new UnavailableSecretProvider();
+  if (providers.length === 1) return providers[0]!;
+
+  return new ChainedSecretProvider(providers);
 }

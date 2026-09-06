@@ -10,6 +10,7 @@ import {
 import { isReservedTenantSlug } from "@/constants/reserved-slugs";
 import { prisma } from "@/server/db/prisma";
 import type {
+  DatabaseConnectionPointers,
   DatabaseTarget,
   ProvisionInput,
   ProvisionOutcome,
@@ -214,6 +215,21 @@ export class PrismaProvisioningRepository implements ProvisioningRepository {
       databaseName: row.databaseName,
       status: provisioningMap[row.status],
     };
+  }
+
+  async setDatabaseConnection(
+    tenantId: string,
+    connection: DatabaseConnectionPointers,
+  ): Promise<void> {
+    await prisma.tenantDatabase.updateMany({
+      where: { tenantId },
+      data: {
+        hostReference: connection.host,
+        port: connection.port,
+        usernameReference: connection.username,
+        secretReference: connection.secretReference,
+      },
+    });
   }
 
   async rejectRegistration(registrationId: string): Promise<boolean> {

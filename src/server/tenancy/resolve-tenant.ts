@@ -1,101 +1,118 @@
 import "server-only";
 
-import { headers } from "next/headers";
-import { cache } from "react";
-
-import { env } from "@/config/env";
+import { isReservedTenantSlug } from "@/constants/reserved-slugs";
 import { repositories } from "@/server/repositories";
-import type { TenantRoutingTarget } from "@/server/repositories/contracts/tenant-repository";
-
-import { TENANT_HOST_HEADER, TENANT_LABEL_HEADER } from "./headers";
-import { tenantLabelFromHost } from "./host";
-import { getTenantPrisma, type TenantConnection } from "./tenant-prisma";
+import {
+  getTenantPrisma,
+  type TenantPrismaClient,
+} from "@/server/tenancy/tenant-prisma";
 
 /**
- * Request-scoped tenant resolution.
+ * Turning a URL segment into a tenant database connection.
  *
- * Middleware has already parsed the host and, if it looked tenant-scoped,
- * forwarded the label. The lookup itself happens here because it needs the
- * master database, which middleware's edge runtime cannot reach.
+ * This is the single chokepoint for tenant isolation, and every tenant-scoped
+ * page, action and route handler goes through it. The rule it enforces: the
+ * slug in the URL selects *which* tenant is being asked for, and never *that*
+ * the caller may have it. Authorisation is a separate step, decided from the
+ * session, and `authorizeTenantAccess` is what performs it.
+ *
+ * The connection returned is the tenant's own database. No query made through
+ * it can reach the master database or another tenant, because it is a different
+ * connection to a different database with a client that has no models for
+ * anything else.
  */
 
 export type TenantResolution =
-  | { readonly kind: "platform" }
-  | { readonly kind: "unknown-tenant"; readonly label: string }
-  | {
-      readonly kind: "suspended";
-      readonly label: string;
-      readonly target: TenantRoutingTarget;
-    }
-  | {
-      readonly kind: "not-provisioned";
-      readonly label: string;
-      readonly target: TenantRoutingTarget;
-    }
-  | {
-      readonly kind: "tenant";
-      readonly label: string;
-      readonly target: TenantRoutingTarget;
-    };
+  | { readonly ok: true; readonly tenant: ResolvedTenant }
+  | { readonly ok: false; readonly reason: TenantResolutionFailure };
 
-/** Statuses whose tenants must not be served, whatever their host says. */
-const SERVABLE = new Set(["active", "trial"]);
+export type TenantResolutionFailure =
+  /** No tenant claims this slug, or the slug is a platform path. */
+  | "unknown-tenant"
+  /** The tenant exists but is suspended, rejected or archived. */
+  | "tenant-inactive"
+  /** The database has not finished provisioning, or provisioning failed. */
+  | "not-provisioned"
+  /** The credential could not be resolved, so no connection was attempted. */
+  | "secret-unavailable"
+  /** The database is provisioned but did not accept a connection. */
+  | "connect-failed";
+
+export interface ResolvedTenant {
+  readonly id: string;
+  readonly slug: string;
+  readonly businessName: string;
+  /** Scoped to this tenant's database. Never the master client. */
+  readonly db: TenantPrismaClient;
+}
 
 /**
- * `cache` dedupes this within a single request, so a layout and the page it
- * wraps resolve the tenant once rather than querying per component.
+ * Resolves a slug to a connected tenant database.
+ *
+ * Deliberately says nothing about who is asking. Callers must pair it with
+ * {@link assertTenantAccess}; a resolution on its own is not permission.
  */
-export const resolveTenant = cache(async (): Promise<TenantResolution> => {
-  const headerList = await headers();
+export async function resolveTenant(slug: string): Promise<TenantResolution> {
+  const normalized = slug.trim().toLowerCase();
 
-  // Prefer the label middleware derived; fall back to parsing the host here so
-  // the resolution is still correct if middleware did not run for this path.
-  const label =
-    headerList.get(TENANT_LABEL_HEADER) ??
-    tenantLabelFromHost(
-      headerList.get(TENANT_HOST_HEADER) ?? headerList.get("host") ?? "",
-      env.TENANT_ROOT_DOMAIN,
-    );
+  // A reserved slug is a platform path, so it can never name a tenant. Checked
+  // before the database is touched: a lookup for "bo" should not happen at all.
+  if (normalized === "" || isReservedTenantSlug(normalized)) {
+    return { ok: false, reason: "unknown-tenant" };
+  }
 
-  if (!label) return { kind: "platform" };
+  const target =
+    await repositories.tenants.findRoutingTargetBySubdomain(normalized);
 
-  const target = await repositories.tenants.findRoutingTargetBySubdomain(label);
+  if (!target) {
+    return { ok: false, reason: "unknown-tenant" };
+  }
 
-  if (!target) return { kind: "unknown-tenant", label };
-
-  // A suspended or pending tenant keeps its host but is not served from it.
-  if (!SERVABLE.has(target.approvalStatus)) {
-    return { kind: "suspended", label, target };
+  // A suspended workspace is not servable from its own dashboard either. The
+  // tenant exists, so this is distinguishable from an unknown slug — but only
+  // to the platform, never in what an anonymous caller is told.
+  if (target.approvalStatus !== "active" && target.approvalStatus !== "trial") {
+    return { ok: false, reason: "tenant-inactive" };
   }
 
   if (!target.provisioned) {
-    return { kind: "not-provisioned", label, target };
+    return { ok: false, reason: "not-provisioned" };
   }
 
-  return { kind: "tenant", label, target };
-});
-
-/**
- * The tenant's own database client for this request, or a failure reason.
- *
- * Never falls back to the master database: serving master data on a tenant host
- * would leak every tenant's records at once.
- */
-export async function tenantDatabase(): Promise<
-  TenantConnection | { readonly ok: false; readonly reason: "no-tenant" }
-> {
-  const resolution = await resolveTenant();
-
-  if (resolution.kind !== "tenant") {
-    return { ok: false, reason: "no-tenant" };
-  }
-
-  return getTenantPrisma({
-    tenantId: resolution.target.tenantId,
-    databaseName: resolution.target.databaseName,
-    host: resolution.target.host,
-    port: resolution.target.port,
-    username: resolution.target.username,
-    secretReference: resolution.target.secretReference,
+  const connection = await getTenantPrisma({
+    tenantId: target.tenantId,
+    databaseName: target.databaseName,
+    host: target.host,
+    port: target.port,
+    username: target.username,
+    secretReference: target.secretReference,
   });
+
+  if (!connection.ok) {
+    return { ok: false, reason: connection.reason };
+  }
+
+  return {
+    ok: true,
+    tenant: {
+      id: target.tenantId,
+      slug: normalized,
+      businessName: target.businessName,
+      db: connection.prisma,
+    },
+  };
 }
+
+/** Human-readable cause, for a page that must explain itself. */
+export const TENANT_RESOLUTION_MESSAGES: Readonly<
+  Record<TenantResolutionFailure, string>
+> = {
+  "unknown-tenant": "No workspace exists at this address.",
+  "tenant-inactive":
+    "This workspace is not active. Contact support to restore it.",
+  "not-provisioned":
+    "This workspace is still being set up. Its database is not ready yet.",
+  "secret-unavailable":
+    "This workspace's database credentials could not be resolved.",
+  "connect-failed": "This workspace's database did not accept a connection.",
+};
