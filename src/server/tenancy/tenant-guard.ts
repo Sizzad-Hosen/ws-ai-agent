@@ -39,7 +39,10 @@ export interface TenantContext {
  * An unknown tenant is a 404 rather than a redirect: the address names nothing,
  * and saying "sign in to see this" would confirm the workspace exists.
  */
-export async function requireTenantPage(slug: string): Promise<TenantContext> {
+export async function requireTenantPage(
+  slug: string,
+  options: { readonly allowPasswordChange?: boolean } = {},
+): Promise<TenantContext> {
   const resolution = await resolveTenant(slug);
 
   if (!resolution.ok) {
@@ -54,6 +57,13 @@ export async function requireTenantPage(slug: string): Promise<TenantContext> {
 
   if (!user) {
     redirect(`${tenantBasePath(slug)}/login`);
+  }
+
+  // An account still on the password it was created with reaches exactly one
+  // page. Enforced here rather than in a layout, because a layout does not
+  // re-run on every navigation.
+  if (user.mustChangePassword && !options.allowPasswordChange) {
+    redirect(`${tenantBasePath(slug)}/change-password`);
   }
 
   return { tenant: resolution.tenant, user };
@@ -116,6 +126,18 @@ export async function authorizeTenantRequest(
     return {
       ok: false,
       response: apiError("Sign in to use this endpoint.", 401),
+    };
+  }
+
+  // The same gate as the pages: an account owing a password change cannot
+  // reach data through the API either.
+  if (user.mustChangePassword) {
+    return {
+      ok: false,
+      response: apiError(
+        "Change your password before using this workspace.",
+        403,
+      ),
     };
   }
 

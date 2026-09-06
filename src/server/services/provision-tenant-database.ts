@@ -1,9 +1,10 @@
 import "server-only";
 
-import { randomBytes } from "node:crypto";
-
 import { repositories } from "@/server/repositories";
-import { hashTenantPassword } from "@/server/tenancy/tenant-auth";
+import {
+  TENANT_DEFAULT_PASSWORD,
+  hashTenantPassword,
+} from "@/server/tenancy/tenant-auth";
 import {
   getTenantPrisma,
   type TenantPrismaClient,
@@ -95,11 +96,11 @@ export async function provisionDatabaseForTenant(
  *
  * A workspace nobody can reach is not provisioned, it is stranded — there is
  * no invitation mail in this application and no other way in. The account is
- * the owner from the registration, with a generated password surfaced once to
- * the administrator who approved it and stored only as a bcrypt hash.
+ * the owner from the registration, created with the shared default password
+ * and stored only as a bcrypt hash.
  *
- * Returns null when the account already exists, so a retry does not reset a
- * password the owner may already be using.
+ * Returns null when the account already exists, so a retry never resets a
+ * password the owner may already have chosen.
  */
 async function createOwnerUser(
   tenantId: string,
@@ -120,19 +121,19 @@ async function createOwnerUser(
 
   if (existing) return null;
 
-  // 32 base64url characters: generated, never chosen, and never logged.
-  const password = randomBytes(24).toString("base64url");
-
   await resolution.user.create({
     data: {
       email,
       name: tenant.ownerName,
-      passwordHash: await hashTenantPassword(password),
-      status: "ACTIVE",
+      passwordHash: await hashTenantPassword(TENANT_DEFAULT_PASSWORD),
+      // INVITED, not ACTIVE: the account exists but still holds the password it
+      // was created with, and the guard will not let it past the
+      // change-password screen until that is replaced.
+      status: "INVITED",
     },
   });
 
-  return { email, password };
+  return { email, password: TENANT_DEFAULT_PASSWORD };
 }
 
 /**

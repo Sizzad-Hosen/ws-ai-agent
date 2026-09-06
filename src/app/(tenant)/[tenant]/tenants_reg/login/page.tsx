@@ -11,8 +11,14 @@ export const metadata: Metadata = {
 
 export default async function TenantLoginPage({
   params,
+  searchParams,
 }: PageProps<"/[tenant]/tenants_reg/login">) {
   const { tenant: slug } = await params;
+  const query = await searchParams;
+  // Set by the change-password flow, which revokes every session and sends the
+  // user back here to sign in with what they just chose.
+  const passwordChanged = query.changed === "1";
+
   // Resolves the workspace but requires no session: this is how you get one.
   const tenant = await requireTenantOnly(slug);
 
@@ -28,6 +34,15 @@ export default async function TenantLoginPage({
         <p className="text-muted-foreground mt-2 text-sm leading-6">
           Manage your catalogue, customers and orders.
         </p>
+
+        {passwordChanged ? (
+          <p
+            className="border-success-container bg-success-container/40 text-success-container-foreground mt-4 rounded-md border p-3 text-sm"
+            role="status"
+          >
+            Password changed. Sign in with your new one.
+          </p>
+        ) : null}
 
         <TenantLoginForm slug={tenant.slug} />
       </section>

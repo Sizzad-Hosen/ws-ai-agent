@@ -42,10 +42,31 @@ const dummyHashPromise = hash("invalid-development-credential", BCRYPT_ROUNDS);
 
 export const TENANT_SESSION_COOKIE = "tenant_session";
 
+/**
+ * The password every tenant owner's account is created with.
+ *
+ * Deliberately weak and deliberately shared, at the product owner's direction,
+ * so an owner can be told their sign-in over the phone. The account is created
+ * INVITED rather than ACTIVE, which forces a change before the dashboard can be
+ * reached — but until that change happens, anyone who knows the owner's email
+ * address can sign in as them. That window is the cost of this choice.
+ */
+export const TENANT_DEFAULT_PASSWORD = "12345678";
+
+/** Shortest password an owner may replace the default with. */
+export const TENANT_MIN_PASSWORD_LENGTH = 8;
+
 export interface TenantSessionUser {
   readonly id: string;
   readonly name: string;
   readonly email: string;
+  /**
+   * True while the account still holds the password it was created with.
+   * Tracked as `status = INVITED`, which already means "created, setup not
+   * finished" — so this needs no column of its own and works for every tenant
+   * database already provisioned.
+   */
+  readonly mustChangePassword: boolean;
 }
 
 export function createTenantSessionToken(): string {
@@ -81,7 +102,11 @@ export async function signInTenantUser(
   const passwordHash = user?.passwordHash ?? (await dummyHashPromise);
   const passwordMatches = await compare(password, passwordHash);
 
-  if (!user || user.status !== "ACTIVE" || !passwordMatches) {
+  // INVITED signs in; it just cannot go anywhere except the change-password
+  // screen. SUSPENDED cannot sign in at all.
+  const signInAllowed = user?.status === "ACTIVE" || user?.status === "INVITED";
+
+  if (!user || !signInAllowed || !passwordMatches) {
     return null;
   }
 
@@ -145,12 +170,13 @@ export async function getCurrentTenantUser(
     }
 
     // A suspended account loses access immediately, not at token expiry.
-    if (session.user.status !== "ACTIVE") return null;
+    if (session.user.status === "SUSPENDED") return null;
 
     return {
       id: session.user.id,
       name: session.user.name,
       email: session.user.email,
+      mustChangePassword: session.user.status === "INVITED",
     };
   } catch (error: unknown) {
     console.error("Unable to validate the tenant session.", error);
@@ -192,4 +218,47 @@ export async function clearTenantSession(
     name: TENANT_SESSION_COOKIE,
     path: tenantBasePath(tenant.slug),
   });
+}
+
+export type ChangePasswordOutcome =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: "wrong-password" | "same-password" };
+
+/**
+ * Replaces a tenant user's password and completes their account.
+ *
+ * Every other session is revoked: if the default password was used by someone
+ * else before the owner got here, changing it has to end their access too, or
+ * the change achieves nothing.
+ */
+export async function changeTenantPassword(
+  tenant: ResolvedTenant,
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<ChangePasswordOutcome> {
+  const user = await tenant.db.user.findUnique({
+    where: { id: userId },
+    select: { passwordHash: true },
+  });
+
+  if (!user || !(await compare(currentPassword, user.passwordHash))) {
+    return { ok: false, reason: "wrong-password" };
+  }
+
+  if (await compare(newPassword, user.passwordHash)) {
+    return { ok: false, reason: "same-password" };
+  }
+
+  await tenant.db.user.update({
+    where: { id: userId },
+    data: {
+      passwordHash: await hashTenantPassword(newPassword),
+      status: "ACTIVE",
+    },
+  });
+
+  await tenant.db.userSession.deleteMany({ where: { userId } });
+
+  return { ok: true };
 }
