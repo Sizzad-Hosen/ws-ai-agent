@@ -9,6 +9,7 @@ import { prisma } from "@/server/db/prisma";
 import { repositories } from "@/server/repositories";
 import { provisionDatabaseForTenant } from "@/server/services/provision-tenant-database";
 import { TENANT_SCHEMA_VERSION } from "@/server/tenancy/provision-database";
+import { releaseTenantPrisma } from "@/server/tenancy/tenant-prisma";
 import { REGISTRATION_CHECK_TYPES } from "@/types/status";
 
 /**
@@ -236,6 +237,10 @@ async function cleanUp(
   databaseName: string | null,
 ): Promise<void> {
   if (tenantId) {
+    // Provisioning opens a pooled connection to seed the owner user, so the
+    // pool must be closed before Postgres will drop the database.
+    await releaseTenantPrisma(tenantId);
+
     await prisma.invoice.deleteMany({ where: { tenantId } });
     await prisma.subscription.deleteMany({ where: { tenantId } });
     await prisma.tenant.deleteMany({ where: { id: tenantId } });
@@ -250,6 +255,10 @@ async function cleanUp(
     const client = new Client({ connectionString: url.toString() });
     await client.connect();
     try {
+      await client.query(
+        `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1`,
+        [databaseName],
+      );
       await client.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
     } finally {
       await client.end().catch(() => undefined);

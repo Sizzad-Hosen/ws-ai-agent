@@ -75,6 +75,10 @@ export interface ProvisioningRepository {
     tenantId: string,
     connection: DatabaseConnectionPointers,
   ): Promise<void>;
+  /** The pointers written above, for opening a connection during provisioning. */
+  findDatabasePointers(
+    tenantId: string,
+  ): Promise<DatabaseConnectionPointers | null>;
 }
 
 /** Pointers, never credentials (S-03). */

@@ -232,6 +232,29 @@ export class PrismaProvisioningRepository implements ProvisioningRepository {
     });
   }
 
+  async findDatabasePointers(
+    tenantId: string,
+  ): Promise<DatabaseConnectionPointers | null> {
+    const row = await prisma.tenantDatabase.findUnique({
+      where: { tenantId },
+      select: {
+        hostReference: true,
+        port: true,
+        usernameReference: true,
+        secretReference: true,
+      },
+    });
+
+    if (!row) return null;
+
+    return {
+      host: row.hostReference,
+      port: row.port,
+      username: row.usernameReference,
+      secretReference: row.secretReference,
+    };
+  }
+
   async rejectRegistration(registrationId: string): Promise<boolean> {
     const result = await prisma.tenantRegistration.updateMany({
       where: { id: registrationId, status: "PENDING_REVIEW" },
