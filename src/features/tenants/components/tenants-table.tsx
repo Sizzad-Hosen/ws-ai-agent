@@ -15,6 +15,7 @@ import {
   TableScroller,
 } from "@/components/ui/table";
 import { ROUTES } from "@/constants/routes";
+import { tenantWorkspaceUrls } from "@/features/tenant-dashboard/routes";
 import type {
   PendingTenantApplication,
   TenantListItem,
@@ -34,6 +35,11 @@ const COLUMN_COUNT = 7;
 interface TenantsTableProps {
   readonly items: readonly TenantListItem[];
   /**
+   * Platform origin, passed in rather than read here: `env` is server-only and
+   * this is a Client Component.
+   */
+  readonly appUrl: string;
+  /**
    * Applications awaiting review, listed above the tenants they may become.
    * Empty when a status filter excludes them.
    */
@@ -44,6 +50,7 @@ interface TenantsTableProps {
 
 export function TenantsTable({
   items,
+  appUrl,
   pending,
   hasFilters,
   canManage,
@@ -203,6 +210,12 @@ export function TenantsTable({
                     businessName={tenant.businessName}
                     status={tenant.approvalStatus}
                     websiteUrl={tenant.websiteUrl}
+                    dashboardUrl={
+                      tenant.subdomain
+                        ? tenantWorkspaceUrls(appUrl, tenant.subdomain)
+                            .dashboard
+                        : null
+                    }
                     canManage={canManage}
                   />
                 </TD>

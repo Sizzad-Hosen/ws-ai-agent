@@ -17,6 +17,11 @@ export interface Tenant {
   readonly region: string | null;
   /** Public storefront URL. Null when the tenant has no site on file. */
   readonly websiteUrl: string | null;
+  /**
+   * Host label that addresses this tenant, e.g. "acme" in /acme. Null until
+   * provisioning assigns one; without it there is no workspace to link to.
+   */
+  readonly subdomain: string | null;
   readonly approvalStatus: TenantApprovalStatus;
   readonly createdAt: string;
   /** `tenants.registration_id` — proposed in 2.5 / D-02, shown on screen 04. */

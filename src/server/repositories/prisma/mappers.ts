@@ -223,6 +223,7 @@ export function mapTenant(
     industry: tenant.industry,
     region: tenant.region,
     websiteUrl: tenant.websiteUrl,
+    subdomain: tenant.subdomain,
     approvalStatus: tenantApprovalMap[tenant.approvalStatus],
     createdAt: tenant.createdAt.toISOString(),
     registrationCode,

@@ -21,6 +21,11 @@ export type ProvisionDatabaseOutcome =
   | { readonly ok: true; readonly created: boolean }
   | { readonly ok: false; readonly reason: string };
 
+/** What a database already at some schema version is at. */
+export interface ExistingSchema {
+  readonly version: string;
+}
+
 /**
  * Creates a tenant's physical database and applies the tenant schema.
  *
@@ -134,7 +139,20 @@ async function applySchema(
   await client.connect();
 
   try {
-    if (await hasSchema(client)) return;
+    const existing = await existingSchema(client);
+
+    if (existing) {
+      if (existing.version === TENANT_SCHEMA_VERSION) return;
+
+      // Provisioned, but at a different version. Re-running the create script
+      // would fail on the first object that already exists and leave the
+      // database half-migrated, so this stops and says so. Migrating a tenant
+      // database between versions is a separate job this does not do yet.
+      throw new Error(
+        `Tenant database is at schema ${existing.version}, not ${TENANT_SCHEMA_VERSION}. ` +
+          `Migrating an existing tenant database is not implemented; recreate it or add a migration.`,
+      );
+    }
 
     const sql = await readFile(
       path.join(process.cwd(), "src/server/tenancy/schema/001_initial.sql"),
@@ -149,15 +167,23 @@ async function applySchema(
   }
 }
 
-async function hasSchema(client: Client): Promise<boolean> {
+/**
+ * The schema version this database is already at, or null if it has none.
+ *
+ * Deliberately not "is it at the current version": a database at an older
+ * version is provisioned, just outdated, and treating it as empty means
+ * re-running create statements against objects that already exist.
+ */
+async function existingSchema(client: Client): Promise<ExistingSchema | null> {
   const marker = await client
     .query<{ version: string }>(
-      `SELECT version FROM schema_migrations WHERE version = $1`,
-      [TENANT_SCHEMA_VERSION],
+      `SELECT version FROM schema_migrations ORDER BY applied_at DESC LIMIT 1`,
     )
     .catch(() => null);
 
-  return marker !== null && marker.rowCount === 1;
+  const version = marker?.rows[0]?.version;
+
+  return version === undefined ? null : { version };
 }
 
 /**

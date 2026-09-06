@@ -7,6 +7,7 @@ import {
   CircleCheck,
   ExternalLink,
   Eye,
+  LayoutDashboard,
   PauseCircle,
   PlayCircle,
 } from "lucide-react";
@@ -29,6 +30,8 @@ interface TenantRowActionsProps {
   readonly businessName: string;
   readonly status: TenantApprovalStatus;
   readonly websiteUrl: string | null;
+  /** Absolute dashboard URL, or null before provisioning assigns an address. */
+  readonly dashboardUrl: string | null;
   readonly canManage: boolean;
 }
 
@@ -37,6 +40,7 @@ export function TenantRowActions({
   businessName,
   status,
   websiteUrl,
+  dashboardUrl,
   canManage,
 }: TenantRowActionsProps) {
   const router = useRouter();
@@ -79,6 +83,20 @@ export function TenantRowActions({
             View details
           </Link>
         </DropdownMenuItem>
+
+        {dashboardUrl ? (
+          <DropdownMenuItem asChild>
+            <a href={dashboardUrl} target="_blank" rel="noreferrer noopener">
+              <LayoutDashboard className="size-4 shrink-0" aria-hidden="true" />
+              Open dashboard
+            </a>
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem disabled hint="No workspace address yet">
+            <LayoutDashboard className="size-4 shrink-0" aria-hidden="true" />
+            Open dashboard
+          </DropdownMenuItem>
+        )}
 
         {websiteUrl ? (
           <DropdownMenuItem asChild>

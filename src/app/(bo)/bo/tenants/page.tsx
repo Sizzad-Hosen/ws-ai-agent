@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Pagination } from "@/components/ui/pagination";
+import { env } from "@/config/env";
 import { PLATFORM_PERMISSIONS } from "@/constants/permissions";
 import { ROUTES } from "@/constants/routes";
 import { countPassedChecks } from "@/features/registrations/types";
@@ -153,6 +154,7 @@ export default async function TenantsPage({
         />
         <TenantsTable
           items={result.items}
+          appUrl={env.NEXT_PUBLIC_APP_URL}
           pending={pending}
           hasFilters={hasFilters}
           canManage={canManage}
