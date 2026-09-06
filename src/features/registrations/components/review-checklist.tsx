@@ -1,7 +1,12 @@
-import { Check, CircleAlert, Info, X } from "lucide-react";
+"use client";
+
+import { useRouter } from "next/navigation";
+import { Check, CircleAlert, Info, LoaderCircle, X } from "lucide-react";
+import { useState, useTransition } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { recordCheckAction } from "@/features/registrations/actions/record-check-action";
 import {
   REGISTRATION_CHECK_LABELS,
   countPassedChecks,
@@ -10,12 +15,50 @@ import {
 import { cn } from "@/lib/utils";
 
 interface ReviewChecklistProps {
+  readonly registrationId: string;
   readonly checks: readonly RegistrationCheck[];
   readonly canManage: boolean;
+  /** The checklist is evidence for a decision, so it closes once one is made. */
+  readonly isOpen: boolean;
 }
 
-export function ReviewChecklist({ checks, canManage }: ReviewChecklistProps) {
+export function ReviewChecklist({
+  registrationId,
+  checks,
+  canManage,
+  isOpen,
+}: ReviewChecklistProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [pendingType, setPendingType] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
   const passed = countPassedChecks(checks);
+  const editable = canManage && isOpen;
+
+  function record(
+    checkType: RegistrationCheck["checkType"],
+    status: "passed" | "failed",
+  ): void {
+    setError(null);
+    setPendingType(checkType);
+
+    startTransition(async () => {
+      const outcome = await recordCheckAction({
+        registrationId,
+        checkType,
+        status,
+      });
+
+      setPendingType(null);
+
+      if (outcome.success) {
+        router.refresh();
+      } else {
+        setError(outcome.message);
+      }
+    });
+  }
 
   return (
     <div className="space-y-4">
@@ -26,10 +69,17 @@ export function ReviewChecklist({ checks, canManage }: ReviewChecklistProps) {
         </Badge>
       </div>
 
+      {error ? (
+        <p className="text-destructive text-sm" role="alert">
+          {error}
+        </p>
+      ) : null}
+
       <ul className="space-y-3">
         {checks.map((check) => {
           const copy = REGISTRATION_CHECK_LABELS[check.checkType];
-          const isPending = check.status === "pending";
+          const isChecking = isPending && pendingType === check.checkType;
+          const isPendingCheck = check.status === "pending";
           const isFailed = check.status === "failed";
 
           return (
@@ -39,7 +89,7 @@ export function ReviewChecklist({ checks, canManage }: ReviewChecklistProps) {
                 "rounded-md border p-3.5",
                 check.status === "passed" &&
                   "border-border bg-success-container/30",
-                isPending &&
+                isPendingCheck &&
                   "border-warning/40 bg-warning-container/40 border-l-2",
                 isFailed &&
                   "border-destructive/40 bg-destructive-container/40 border-l-2",
@@ -61,14 +111,41 @@ export function ReviewChecklist({ checks, canManage }: ReviewChecklistProps) {
                     </p>
                   ) : null}
 
-                  {isPending && canManage ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="bg-warning-container text-warning-container-foreground mt-2"
-                    >
-                      Check Status
-                    </Button>
+                  {/* A failed check stays actionable: a mistaken verdict, or an
+                      applicant who since produced the evidence, must not leave
+                      the registration permanently unapprovable. */}
+                  {editable && check.status !== "passed" ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={isPending}
+                        onClick={() => record(check.checkType, "passed")}
+                        className="bg-success-container text-success-container-foreground"
+                      >
+                        {isChecking ? (
+                          <LoaderCircle
+                            className="size-3.5 animate-spin"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <Check className="size-3.5" aria-hidden="true" />
+                        )}
+                        Mark passed
+                      </Button>
+                      {isPendingCheck ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={isPending}
+                          onClick={() => record(check.checkType, "failed")}
+                          className="text-destructive"
+                        >
+                          <X className="size-3.5" aria-hidden="true" />
+                          Mark failed
+                        </Button>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
               </div>
@@ -79,7 +156,11 @@ export function ReviewChecklist({ checks, canManage }: ReviewChecklistProps) {
 
       <div className="border-border text-muted-foreground flex items-start gap-2 border-t pt-4 text-xs">
         <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        <p>All checks must pass before final approval.</p>
+        <p>
+          {editable
+            ? "All checks must pass before final approval. Each verdict is recorded against your account — nothing here is verified automatically."
+            : "All checks must pass before final approval."}
+        </p>
       </div>
     </div>
   );

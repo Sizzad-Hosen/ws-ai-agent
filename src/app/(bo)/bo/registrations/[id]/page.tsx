@@ -158,7 +158,12 @@ export default async function RegistrationReviewPage({
 
         <Card>
           <CardBody className="pt-5">
-            <ReviewChecklist checks={checks} canManage={canManage} />
+            <ReviewChecklist
+              registrationId={registration.id}
+              checks={checks}
+              canManage={canManage}
+              isOpen={registration.status === "pending_review"}
+            />
           </CardBody>
         </Card>
       </div>

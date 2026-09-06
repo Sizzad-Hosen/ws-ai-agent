@@ -7,12 +7,16 @@ import type {
 import { prisma } from "@/server/db/prisma";
 import type {
   NewRegistration,
+  RecordCheckOutcome,
+  RegistrationCheckDecision,
   RegistrationListQuery,
   RegistrationRepository,
 } from "@/server/repositories/contracts/registration-repository";
 import type { PaginatedResult } from "@/types/repository";
 
 import {
+  checkStatusToPrisma,
+  checkTypeToPrisma,
   mapRegistration,
   mapRegistrationCheck,
   registrationStatusToPrisma,
@@ -33,7 +37,7 @@ export class PrismaRegistrationRepository implements RegistrationRepository {
       where: { id },
       include: INCLUDE,
     });
-    return registration ? withSubmittedAt(registration) : null;
+    return registration ? mapRegistration(registration) : null;
   }
 
   async findDetailById(id: string): Promise<RegistrationDetail | null> {
@@ -84,7 +88,9 @@ export class PrismaRegistrationRepository implements RegistrationRepository {
       where,
       skip: offset,
       take: limit,
-      orderBy: { registrationCode: Prisma.SortOrder.asc },
+      // Newest application first: the review queue is worked from the top, and
+      // registration_code is not an arrival order.
+      orderBy: { createdAt: Prisma.SortOrder.desc },
       include: INCLUDE,
     });
     const total = await prisma.tenantRegistration.count({ where });
@@ -134,29 +140,42 @@ export class PrismaRegistrationRepository implements RegistrationRepository {
 
     return code;
   }
-}
 
-/** Earliest completed check, used as a stand-in for a missing created_at. */
-function earliestCheckedAt(
-  registration: RegistrationWithChecks,
-): string | null {
-  const timestamps = registration.checks
-    .map((check) => check.checkedAt)
-    .filter((value): value is Date => value !== null)
-    .map((value) => value.getTime());
+  async recordCheck(
+    decision: RegistrationCheckDecision,
+  ): Promise<RecordCheckOutcome> {
+    // One transaction so the "still pending" guard cannot be overtaken by an
+    // approval landing between the read and the write.
+    return prisma.$transaction(async (tx) => {
+      const registration = await tx.tenantRegistration.findUnique({
+        where: { id: decision.registrationId },
+        select: { status: true },
+      });
 
-  return timestamps.length === 0
-    ? null
-    : new Date(Math.min(...timestamps)).toISOString();
-}
+      if (!registration) return { ok: false, reason: "not-found" } as const;
 
-function withSubmittedAt(
-  registration: RegistrationWithChecks,
-): TenantRegistration {
-  return {
-    ...mapRegistration(registration),
-    submittedAt: earliestCheckedAt(registration),
-  };
+      if (registration.status !== "PENDING_REVIEW") {
+        return { ok: false, reason: "not-pending" } as const;
+      }
+
+      const updated = await tx.tenantRegistrationCheck.updateMany({
+        where: {
+          tenantRegistrationId: decision.registrationId,
+          checkType: checkTypeToPrisma[decision.checkType],
+        },
+        data: {
+          status: checkStatusToPrisma[decision.status],
+          notes: decision.notes,
+          checkedAt: new Date(),
+          checkedBy: decision.reviewerId,
+        },
+      });
+
+      return updated.count === 0
+        ? ({ ok: false, reason: "not-found" } as const)
+        : ({ ok: true } as const);
+    });
+  }
 }
 
 async function toDetail(
@@ -183,7 +202,7 @@ async function toDetail(
   const names = new Map(reviewers.map((admin) => [admin.id, admin.name]));
 
   return {
-    registration: withSubmittedAt(registration),
+    registration: mapRegistration(registration),
     requestedPlanName: registration.requestedPlan?.name ?? null,
     checks: registration.checks.map((check) =>
       mapRegistrationCheck(

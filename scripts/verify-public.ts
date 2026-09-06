@@ -4,8 +4,10 @@ import {
   annualSavingPercent,
   toPublicPlans,
 } from "@/features/public-site/pricing";
+import { allChecksPassed } from "@/features/registrations/types";
 import { prisma } from "@/server/db/prisma";
 import { repositories } from "@/server/repositories";
+import { REGISTRATION_CHECK_TYPES } from "@/types/status";
 
 async function main(): Promise<void> {
   // ---- pricing reads the live catalogue --------------------------------
@@ -85,6 +87,47 @@ async function main(): Promise<void> {
     );
   }
 
+  // ---- the queue can actually be worked ---------------------------------
+  // A registration arrives with every check pending and approval gated on all
+  // of them passing, so if nothing can record a verdict the application is
+  // unapprovable and no tenant can ever come from it.
+  if (allChecksPassed(created.checks)) {
+    throw new Error("A new registration arrived already approvable.");
+  }
+
+  const reviewer = await prisma.adminUser.findFirst({ select: { id: true } });
+  if (!reviewer) {
+    throw new Error("No administrator exists to record a review check.");
+  }
+
+  for (const checkType of REGISTRATION_CHECK_TYPES) {
+    const outcome = await repositories.registrations.recordCheck({
+      registrationId: created.registration.id,
+      checkType,
+      status: "passed",
+      notes: null,
+      reviewerId: reviewer.id,
+    });
+
+    if (!outcome.ok) {
+      throw new Error(`Could not record ${checkType}: ${outcome.reason}.`);
+    }
+  }
+
+  const reviewed = await repositories.registrations.findDetailById(
+    created.registration.id,
+  );
+
+  if (!reviewed || !allChecksPassed(reviewed.checks)) {
+    throw new Error(
+      "Recording every check did not make the registration approvable.",
+    );
+  }
+
+  if (reviewed.checks.some((check) => check.checkedByName === null)) {
+    throw new Error("A recorded check is not attributed to its reviewer.");
+  }
+
   // ---- site settings drive the shell ------------------------------------
   const settings = await repositories.siteSettings.find();
   if (settings.brand.name === "") {
@@ -101,7 +144,7 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    `Public site verified: ${plans.length} plans (${custom.length} custom, annual saving ${saving}%), registration ${code} reached the review queue with 3 checks, brand "${settings.brand.name}". Queue restored.`,
+    `Public site verified: ${plans.length} plans (${custom.length} custom, annual saving ${saving}%), registration ${code} reached the review queue with 3 checks and became approvable once all three were recorded, brand "${settings.brand.name}". Queue restored.`,
   );
 }
 
