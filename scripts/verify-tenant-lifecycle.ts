@@ -8,7 +8,7 @@ import { allChecksPassed } from "@/features/registrations/types";
 import { prisma } from "@/server/db/prisma";
 import { repositories } from "@/server/repositories";
 import { provisionDatabaseForTenant } from "@/server/services/provision-tenant-database";
-import { TENANT_SCHEMA_VERSION } from "@/server/tenancy/provision-database";
+import { pendingTenantMigrations } from "@/server/tenancy/migrate-tenant-database";
 import { releaseTenantPrisma } from "@/server/tenancy/tenant-prisma";
 import { REGISTRATION_CHECK_TYPES } from "@/types/status";
 
@@ -162,7 +162,7 @@ async function main(): Promise<void> {
     );
 
     console.log(
-      `Tenant lifecycle verified: ${code} queued with 3 checks, approved to ${provisioned.tenant.tenantCode}, database ${databaseName} created with schema ${TENANT_SCHEMA_VERSION}, storefront at ${provisioned.tenant.websiteUrl}. Cleaned up.`,
+      `Tenant lifecycle verified: ${code} queued with 3 checks, approved to ${provisioned.tenant.tenantCode}, database ${databaseName} created and fully migrated, storefront at ${provisioned.tenant.websiteUrl}. Cleaned up.`,
     );
   } finally {
     await cleanUp(registrationId, tenantId, databaseName);
@@ -220,11 +220,22 @@ async function assertTenantSchema(databaseName: string): Promise<void> {
     }
 
     const version = await client.query<{ version: string }>(
-      "SELECT version FROM schema_migrations",
+      "SELECT version FROM schema_migrations ORDER BY applied_at DESC LIMIT 1",
     );
     check(
-      version.rows[0]?.version === TENANT_SCHEMA_VERSION,
-      "Tenant database does not record the schema version.",
+      version.rows[0]?.version !== undefined,
+      "Tenant database does not record a schema version.",
+    );
+
+    // "Up to date" rather than "at the newest version that exists": a
+    // migration whose extension this server lacks is skipped, so a database
+    // can be legitimately behind and still have everything it can have.
+    const pending = await pendingTenantMigrations(client);
+    check(
+      pending.length === 0,
+      `Tenant database is missing migrations: ${pending
+        .map((migration) => migration.file)
+        .join(", ")}.`,
     );
   } finally {
     await client.end().catch(() => undefined);

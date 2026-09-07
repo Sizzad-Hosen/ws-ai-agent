@@ -2,9 +2,10 @@
 --
 -- Run `npm run tenant:sql` after changing prisma/tenant/schema.prisma.
 --
--- The tenant database schema, applied by
--- src/server/tenancy/provision-database.ts when an approved registration
--- becomes a tenant. Source of truth for the shape is
+-- The initial tenant database schema, applied by
+-- src/server/tenancy/migrate-tenant-database.ts to an empty database. Later
+-- migrations live beside this file and are hand-written. Source of truth for
+-- the shape is
 -- docs/db/SaaS Tenant DB — Business + Storefront + AI + WhatsApp.png,
 -- transcribed into prisma/tenant/schema.prisma.
 
@@ -624,13 +625,11 @@ ALTER TABLE "webhook_events" ADD CONSTRAINT "webhook_events_whatsapp_account_id_
 ALTER TABLE "ai_usage_logs" ADD CONSTRAINT "ai_usage_logs_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 
--- Records which schema version this database is at, so the provisioner can
--- tell an empty database from a provisioned one without inspecting tables.
+-- Records which migrations this database has had, so the runner can tell an
+-- empty database from a provisioned one, and a current one from one behind.
 CREATE TABLE "schema_migrations" (
     "version" VARCHAR(40) NOT NULL,
     "applied_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "schema_migrations_pkey" PRIMARY KEY ("version")
 );
-
-INSERT INTO "schema_migrations" ("version") VALUES ('2026.09.3');

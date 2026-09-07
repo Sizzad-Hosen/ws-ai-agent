@@ -74,10 +74,13 @@ export async function provisionDatabaseForTenant(
     });
   }
 
+  // The version the database reached, not the newest one that exists: a
+  // migration skipped for a missing extension leaves the database genuinely
+  // behind, and the back office should say so rather than claim otherwise.
   await repositories.provisioning.setDatabaseStatus(
     tenantId,
     "ready",
-    TENANT_SCHEMA_VERSION,
+    outcome.version ?? TENANT_SCHEMA_VERSION,
   );
 
   const owner = await createOwnerUser(tenantId);
