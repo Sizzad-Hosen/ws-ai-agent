@@ -59,6 +59,26 @@ export interface AssistantTurn {
 export type ReplySource =
   "catalogue" | "knowledge" | "checkout" | "model" | "greeting";
 
+/**
+ * A product as the chat shows it: a card with a price and a button.
+ *
+ * Sent as data rather than baked into the reply text, so the figures on it are
+ * the shop's own rows and not something the model wrote. The button carries
+ * `variantId`, which is what makes "order this" exact — the shopper taps the
+ * row they were shown instead of the assistant guessing which product a
+ * sentence meant.
+ */
+export interface ProductCard {
+  readonly variantId: string;
+  readonly productName: string;
+  readonly sku: string;
+  /** Already formatted in the shop's currency. */
+  readonly price: string;
+  readonly stockLabel: string;
+  readonly available: number;
+  readonly actionLabel: string;
+}
+
 export interface AssistantReply {
   readonly reply: string;
   readonly draft: AssistantDraft;
@@ -67,6 +87,7 @@ export interface AssistantReply {
   readonly orderNumber: string | null;
   /** Tappable answers, so a shopper on a phone types as little as possible. */
   readonly quickReplies: readonly string[];
+  readonly cards: readonly ProductCard[];
 }
 
 export interface AssistantContext {
@@ -77,6 +98,12 @@ export interface AssistantContext {
   readonly message: string;
   /** Prior turns, as the browser has them. Used for phrasing only. */
   readonly history: readonly AssistantTurn[];
+  /**
+   * Set when the shopper tapped a product card's button rather than typing.
+   * The id still gets re-read from the catalogue; it saves a search, not a
+   * check.
+   */
+  readonly selectVariantId?: string | null;
 }
 
 /** How many turns of history the model is shown. */
@@ -118,6 +145,27 @@ export async function respondToCustomer(
       "checkout",
       { quickReplies: catalogueQuickReplies(language) },
     );
+  }
+
+  // A tapped product card is unambiguous, so it starts the checkout on that
+  // exact row instead of searching for whatever the button's label said. The
+  // id is still re-read from the catalogue — a card rendered five minutes ago
+  // may be quoting a price that has since changed.
+  if (context.selectVariantId) {
+    const chosen = await findStorefrontVariant(
+      context.db,
+      context.selectVariantId,
+    );
+
+    if (chosen) {
+      return startCheckout(
+        context,
+        { ...draft, quantity: null },
+        language,
+        chosen,
+        null,
+      );
+    }
   }
 
   // A checkout in progress owns the conversation. The model is not consulted
@@ -176,14 +224,11 @@ async function answerDeterministically(
 
   if (isCatalogueQuery(context.message)) {
     const variants = await listStorefrontVariants(db);
-    return reply(
-      draft,
-      formatCatalogue(variants, settings, language),
-      "catalogue",
-      {
-        quickReplies: orderQuickReplies(variants, language),
-      },
-    );
+
+    return reply(draft, catalogueLead(variants, language), "catalogue", {
+      cards: toCards(variants, settings, language),
+      quickReplies: variants.length === 0 ? [] : deliveryQuickReply(language),
+    });
   }
 
   const knowledge = await searchKnowledge(db, context.message);
@@ -213,14 +258,17 @@ async function answerDeterministically(
             "দোকানে এখনো কোনো পণ্য প্রকাশ করা হয়নি।",
             "Shop-e ekhono kono product publish kora hoyni.",
           )
-        : `${choose(
+        : choose(
             language,
             "I could not find that. Here is what we have:",
             "সেটি খুঁজে পাইনি। আমাদের কাছে যা আছে:",
             "Setá khuje paini. Amader kache ja ache:",
-          )}\n${formatVariants(all, settings, language)}`,
+          ),
       "catalogue",
-      { quickReplies: orderQuickReplies(all, language) },
+      {
+        cards: toCards(all, settings, language),
+        quickReplies: all.length === 0 ? [] : deliveryQuickReply(language),
+      },
     );
   }
 
@@ -236,12 +284,10 @@ async function answerDeterministically(
     );
   }
 
-  return reply(
-    draft,
-    formatVariants(variants, settings, language),
-    "catalogue",
-    { quickReplies: orderQuickReplies(variants, language) },
-  );
+  return reply(draft, matchLead(variants, language), "catalogue", {
+    cards: toCards(variants, settings, language),
+    quickReplies: deliveryQuickReply(language),
+  });
 }
 
 const GREETINGS = new Set([
@@ -293,6 +339,8 @@ interface ToolCallOutcome {
   readonly result: string;
   /** Set when a tool started the checkout; its reply wins over the model's. */
   readonly takeover?: AssistantReply;
+  /** What a catalogue tool found, so the reply can show it as cards. */
+  readonly variants?: readonly StorefrontVariant[];
 }
 
 /**
@@ -318,6 +366,10 @@ async function answerWithModel(
   ];
 
   const workingDraft = draft;
+  // Whatever the catalogue tools surfaced this turn. The model writes the
+  // prose; these carry the figures, so the price on a card is the shop's own
+  // row rather than a number that survived a round trip through a model.
+  const seen: StorefrontVariant[] = [];
 
   try {
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
@@ -351,7 +403,9 @@ async function answerWithModel(
 
         if (text === "") return null;
 
-        return reply(workingDraft, text, "model");
+        return reply(workingDraft, text, "model", {
+          cards: toCards(seen, context.settings, language, 3),
+        });
       }
 
       messages.push({ role: "assistant", content: response.content });
@@ -366,6 +420,14 @@ async function answerWithModel(
         // language. Letting the model paraphrase it is how "reply exactly
         // CONFIRM ORDER" becomes an instruction nobody can follow.
         if (outcome.takeover) return outcome.takeover;
+
+        for (const variant of outcome.variants ?? []) {
+          if (
+            !seen.some((candidate) => candidate.variantId === variant.variantId)
+          ) {
+            seen.push(variant);
+          }
+        }
 
         results.push({
           type: "tool_result",
@@ -468,13 +530,13 @@ async function runTool(
       const query = typeof input.query === "string" ? input.query : "";
       const variants = await searchStorefrontVariants(context.db, query);
 
-      return { result: describeVariants(variants, context.settings) };
+      return { result: describeVariants(variants, context.settings), variants };
     }
 
     case "list_products": {
       const variants = await listStorefrontVariants(context.db);
 
-      return { result: describeVariants(variants, context.settings) };
+      return { result: describeVariants(variants, context.settings), variants };
     }
 
     case "shop_info": {
@@ -694,14 +756,9 @@ async function advanceCheckout(
               "সেটি খুঁজে পাইনি। আপনি কোন পণ্যটির কথা বলছেন?",
               "Setá khuje paini. Kon product-er kotha bolchen?",
             )
-          : `${choose(
-              language,
-              "Which one exactly?",
-              "ঠিক কোনটি?",
-              "Thik konta?",
-            )}\n${formatVariants(variants, settings, language)}`,
+          : choose(language, "Which one exactly?", "ঠিক কোনটি?", "Thik konta?"),
         "checkout",
-        { quickReplies: orderQuickReplies(variants, language) },
+        { cards: toCards(variants, settings, language) },
       );
     }
 
@@ -966,31 +1023,35 @@ function price(
   return money(variant.price, settings);
 }
 
-function formatVariants(
+/** The card shape for a variant, with its labels already localised. */
+function toCards(
   variants: readonly StorefrontVariant[],
   settings: AssistantSettings,
   language: Language,
-): string {
-  return variants
-    .map((variant) => {
-      const stock =
-        variant.available > 0
-          ? choose(
-              language,
-              `${variant.available} in stock`,
-              `স্টকে ${variant.available}টি`,
-              `stock-e ${variant.available} ta`,
-            )
-          : choose(language, "out of stock", "স্টকে নেই", "stock-e nei");
-
-      return `• ${variant.productName} (${variant.sku}) — ${price(variant, settings)}, ${stock}`;
-    })
-    .join("\n");
+  limit = 4,
+): readonly ProductCard[] {
+  return variants.slice(0, limit).map((variant) => ({
+    variantId: variant.variantId,
+    productName: variant.productName,
+    sku: variant.sku,
+    price: price(variant, settings),
+    stockLabel:
+      variant.available > 0
+        ? choose(
+            language,
+            `${variant.available} in stock`,
+            `স্টকে ${variant.available}টি`,
+            `stock-e ${variant.available} ta`,
+          )
+        : choose(language, "Out of stock", "স্টকে নেই", "Stock-e nei"),
+    available: variant.available,
+    actionLabel: choose(language, "Order this", "অর্ডার করব", "Order korbo"),
+  }));
 }
 
-function formatCatalogue(
+/** One sentence above the cards; the cards carry the prices and the stock. */
+function catalogueLead(
   variants: readonly StorefrontVariant[],
-  settings: AssistantSettings,
   language: Language,
 ): string {
   if (variants.length === 0) {
@@ -1002,14 +1063,42 @@ function formatCatalogue(
     );
   }
 
-  const heading = choose(
+  return choose(
     language,
-    "Here is what we have:",
-    "আমাদের কাছে যা আছে:",
-    "Amader kache ja ache:",
+    "Here is what we have. Tap one to order it.",
+    "আমাদের কাছে যা আছে। অর্ডার করতে যেকোনোটিতে চাপ দিন।",
+    "Amader kache ja ache. Order korte jekonotay tap korun.",
   );
+}
 
-  return `${heading}\n${formatVariants(variants, settings, language)}`;
+function matchLead(
+  variants: readonly StorefrontVariant[],
+  language: Language,
+): string {
+  return variants.length === 1
+    ? choose(
+        language,
+        "Yes, we have this:",
+        "হ্যাঁ, এটি আমাদের কাছে আছে:",
+        "Ha, eta amader kache ache:",
+      )
+    : choose(
+        language,
+        "We have these:",
+        "এগুলো আমাদের কাছে আছে:",
+        "Egulo amader kache ache:",
+      );
+}
+
+function deliveryQuickReply(language: Language): readonly string[] {
+  return [
+    choose(
+      language,
+      "Delivery charge?",
+      "ডেলিভারি চার্জ কত?",
+      "Delivery charge koto?",
+    ),
+  ];
 }
 
 function formatSummary(
@@ -1063,22 +1152,6 @@ function catalogueQuickReplies(language: Language): readonly string[] {
   ];
 }
 
-function orderQuickReplies(
-  variants: readonly StorefrontVariant[],
-  language: Language,
-): readonly string[] {
-  return variants
-    .slice(0, 3)
-    .map((variant) =>
-      choose(
-        language,
-        `Order ${variant.productName}`,
-        `${variant.productName} অর্ডার করব`,
-        `${variant.productName} order korbo`,
-      ),
-    );
-}
-
 // ----------------------------------------------------------------- plumbing
 
 /**
@@ -1104,6 +1177,7 @@ function reply(
   extras: {
     readonly orderNumber?: string;
     readonly quickReplies?: readonly string[];
+    readonly cards?: readonly ProductCard[];
   } = {},
 ): AssistantReply {
   return {
@@ -1112,5 +1186,6 @@ function reply(
     source,
     orderNumber: extras.orderNumber ?? null,
     quickReplies: extras.quickReplies ?? [],
+    cards: extras.cards ?? [],
   };
 }

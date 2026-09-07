@@ -9,7 +9,10 @@ delete process.env.ANTHROPIC_API_KEY;
 import { Client } from "pg";
 
 import { env } from "@/config/env";
-import { respondToCustomer } from "@/features/storefront-assistant/agent";
+import {
+  respondToCustomer,
+  type ProductCard,
+} from "@/features/storefront-assistant/agent";
 import { listStorefrontVariants } from "@/features/storefront-assistant/catalogue";
 import {
   newDraft,
@@ -61,7 +64,12 @@ async function say(
   fixture: Fixture,
   draft: AssistantDraft,
   message: string,
-): Promise<{ reply: string; draft: AssistantDraft }> {
+  selectVariantId: string | null = null,
+): Promise<{
+  reply: string;
+  draft: AssistantDraft;
+  cards: readonly ProductCard[];
+}> {
   const settings = await loadAssistantSettings(fixture.db);
   const outcome = await respondToCustomer({
     db: fixture.db,
@@ -70,9 +78,15 @@ async function say(
     draft,
     message,
     history: [],
+    selectVariantId,
   });
 
-  return { reply: outcome.reply, draft: outcome.draft };
+  return { reply: outcome.reply, draft: outcome.draft, cards: outcome.cards };
+}
+
+/** The product names a turn offered as cards. */
+function offered(cards: readonly ProductCard[]): readonly string[] {
+  return cards.map((card) => card.productName);
 }
 
 const BANGLA_SCRIPT = /[ঀ-৿]/;
@@ -123,35 +137,57 @@ async function main(): Promise<void> {
     let a = newDraft();
     let turn = await say(shopA, a, "ki ki product ache?");
     check(
-      turn.reply.includes("Iced Coffee"),
-      `Shop A did not list its own product: ${turn.reply}`,
+      offered(turn.cards).includes("Iced Coffee"),
+      `Shop A did not offer its own product: ${offered(turn.cards).join(", ")}`,
     );
     check(
-      !turn.reply.includes("Hot Samosa"),
-      `Shop A listed Shop B's product: ${turn.reply}`,
+      !offered(turn.cards).includes("Hot Samosa"),
+      `Shop A offered Shop B's product: ${offered(turn.cards).join(", ")}`,
     );
 
     turn = await say(shopA, turn.draft, "hot samosa ache?");
     check(
-      !turn.reply.includes("Hot Samosa"),
+      !offered(turn.cards).includes("Hot Samosa"),
       `Shop A found Shop B's product by name: ${turn.reply}`,
     );
 
     const b = await say(shopB, newDraft(), "iced coffee er dam koto?");
     check(
-      !b.reply.includes("Iced Coffee"),
+      !offered(b.cards).includes("Iced Coffee"),
       `Shop B found Shop A's product by name: ${b.reply}`,
     );
 
     // ---- prices and stock come from the shop's own rows -------------------
     turn = await say(shopA, newDraft(), "iced coffee er dam koto?");
+    const card = turn.cards[0];
+    check(card !== undefined, `No product card was offered: ${turn.reply}`);
     check(
-      turn.reply.includes("4.50") || turn.reply.includes("4,50"),
-      `The price was not quoted from the catalogue: ${turn.reply}`,
+      card.price.includes("4.50") || card.price.includes("4,50"),
+      `The card price was not the catalogue price: ${card.price}`,
     );
     check(
-      turn.reply.includes("25"),
-      `The stock on hand was not quoted: ${turn.reply}`,
+      card.available === 25 && card.stockLabel.includes("25"),
+      `The card did not carry the stock on hand: ${card.stockLabel}`,
+    );
+
+    // ---- tapping the card orders that exact row ---------------------------
+    const tapped = await say(
+      shopA,
+      newDraft(),
+      `${card.actionLabel}: ${card.productName}`,
+      card.variantId,
+    );
+    check(
+      tapped.draft.state === "awaiting_quantity" &&
+        tapped.draft.variantId === card.variantId,
+      `Tapping a card did not start the checkout on that variant: ${tapped.reply}`,
+    );
+
+    // An id for a row that is not on sale here is refused, not followed.
+    const foreign = await say(shopB, newDraft(), "order this", card.variantId);
+    check(
+      foreign.draft.variantId === null,
+      "One shop's card started a checkout on another shop's storefront.",
     );
 
     // ---- the reply follows the customer's language ------------------------
@@ -159,6 +195,10 @@ async function main(): Promise<void> {
     check(
       BANGLA_SCRIPT.test(bangla.reply),
       `A Bangla question was answered without Bangla: ${bangla.reply}`,
+    );
+    check(
+      bangla.cards.every((entry) => BANGLA_SCRIPT.test(entry.stockLabel)),
+      "The card labels were not in the language of the question.",
     );
 
     // ---- the shop's own written answer, not an invented one ---------------
@@ -333,7 +373,9 @@ async function main(): Promise<void> {
     console.log(
       `Storefront assistant verified across ${shopA.slug} and ${shopB.slug}: each shop ` +
         `answered only from its own catalogue, in the customer's language, with prices ` +
-        `and stock read from its own rows; a full chat checkout wrote order ` +
+        `and stock read from its own rows; product cards carried those figures and ` +
+        `ordered the exact row when tapped, and one shop's card was refused on the ` +
+        `other's storefront; a full chat checkout wrote order ` +
         `${order.orderNumber} (${order.total.toString()} BDT) with its customer and ` +
         `address into that shop's tables and nowhere else; unconfirmed and ` +
         `double-confirmed turns placed no extra order. Cleaned up.`,

@@ -1,12 +1,23 @@
 "use client";
 
-import { LoaderCircle, MessageCircle, Send, X } from "lucide-react";
+import {
+  Bot,
+  Check,
+  LoaderCircle,
+  MessageCircle,
+  MoreVertical,
+  Send,
+  X,
+} from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import { cn } from "@/lib/utils";
 
 import { sendAssistantMessageAction } from "@/features/storefront-assistant/actions";
-import type { AssistantTurn } from "@/features/storefront-assistant/agent";
+import type {
+  AssistantTurn,
+  ProductCard,
+} from "@/features/storefront-assistant/agent";
 
 interface StorefrontChatProps {
   readonly slug: string;
@@ -18,6 +29,7 @@ interface StorefrontChatProps {
 interface Bubble extends AssistantTurn {
   readonly id: string;
   readonly orderNumber?: string | null;
+  readonly cards?: readonly ProductCard[];
 }
 
 /**
@@ -29,7 +41,9 @@ interface Bubble extends AssistantTurn {
  * The transcript lives here, in the browser, and is sent back with each turn
  * for phrasing context. What the shopper has actually *chosen* does not live
  * here — that is in a signed, HTTP-only cookie the server owns, so editing
- * this component's state cannot change what an order costs.
+ * this component's state cannot change what an order costs. The product cards
+ * are the same story: the button sends a variant id, and the server re-reads
+ * that row before it quotes anything from it.
  */
 export function StorefrontChat({
   slug,
@@ -38,6 +52,7 @@ export function StorefrontChat({
   openingQuestions,
 }: StorefrontChatProps) {
   const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [quickReplies, setQuickReplies] =
     useState<readonly string[]>(openingQuestions);
@@ -61,12 +76,13 @@ export function StorefrontChat({
     if (open) inputRef.current?.focus();
   }, [open]);
 
-  function send(text: string): void {
+  function send(text: string, selectVariantId?: string): void {
     const message = text.trim();
 
     if (message === "" || isPending) return;
 
     nextId.current += 1;
+    setMenuOpen(false);
 
     const outgoing: Bubble = {
       id: `c-${nextId.current}`,
@@ -75,8 +91,8 @@ export function StorefrontChat({
     };
 
     // The history sent to the server is the transcript *before* this message,
-    // which the action takes as the message itself — the same split the server
-    // expects, so a turn is never counted twice.
+    // which the action takes separately — the same split the server expects,
+    // so a turn is never counted twice.
     const history = bubbles
       .filter((bubble) => bubble.id !== "greeting")
       .map(({ role, text: content }) => ({ role, text: content }));
@@ -90,6 +106,7 @@ export function StorefrontChat({
         slug,
         message,
         history,
+        selectVariantId: selectVariantId ?? null,
       });
 
       setBubbles((current) => [
@@ -99,10 +116,21 @@ export function StorefrontChat({
           role: "assistant",
           text: outcome.reply,
           orderNumber: outcome.orderNumber,
+          cards: outcome.cards,
         },
       ]);
       setQuickReplies(outcome.quickReplies);
     });
+  }
+
+  function startOver(): void {
+    setMenuOpen(false);
+    setBubbles([{ id: "greeting", role: "assistant", text: greeting }]);
+    setQuickReplies(openingQuestions);
+    setDraft("");
+    // The server's draft order is deliberately left alone: clearing the
+    // visible transcript is a tidy-up, and "cancel" is the word that abandons
+    // an order in progress.
   }
 
   return (
@@ -126,16 +154,67 @@ export function StorefrontChat({
         id="storefront-chat-panel"
         hidden={!open}
         aria-label={`Chat with ${businessName}`}
-        className="border-ps-edge bg-ps-panel fixed right-5 bottom-24 z-40 flex h-[min(32rem,calc(100vh-9rem))] w-[min(24rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border shadow-2xl"
+        className="border-ps-edge bg-ps-panel fixed right-5 bottom-24 z-40 flex h-[min(34rem,calc(100vh-9rem))] w-[min(24rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border shadow-2xl"
       >
-        <header className="border-ps-edge bg-ps-page border-b px-4 py-3">
-          <p className="text-ps-ink text-sm font-semibold">{businessName}</p>
-          <p className="text-ps-ink-subtle text-xs">
-            Ask in বাংলা or English — I can take your order here.
-          </p>
+        <header className="border-ps-edge flex items-center gap-3 border-b px-4 py-3">
+          <span
+            className="bg-ps-brand-wash grid size-10 shrink-0 place-items-center rounded-full"
+            aria-hidden="true"
+          >
+            <Bot className="text-ps-brand-deep size-5" />
+          </span>
+
+          <span className="min-w-0 flex-1">
+            <span className="text-ps-ink block truncate text-sm font-semibold">
+              {businessName} Assistant
+            </span>
+            <span className="text-ps-brand-deep flex items-center gap-1.5 text-xs">
+              <span
+                className="bg-ps-brand size-1.5 rounded-full"
+                aria-hidden="true"
+              />
+              Online
+            </span>
+          </span>
+
+          <span className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((current) => !current)}
+              aria-expanded={menuOpen}
+              aria-label="Chat options"
+              className="text-ps-ink-subtle hover:bg-ps-page grid size-8 place-items-center rounded-full transition-colors"
+            >
+              <MoreVertical className="size-4" aria-hidden="true" />
+            </button>
+
+            {menuOpen ? (
+              <span className="border-ps-edge bg-ps-panel absolute right-0 z-10 mt-1 flex w-40 flex-col overflow-hidden rounded-xl border py-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={startOver}
+                  className="text-ps-ink hover:bg-ps-page px-3 py-2 text-left text-sm"
+                >
+                  Start over
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setOpen(false);
+                  }}
+                  className="text-ps-ink hover:bg-ps-page px-3 py-2 text-left text-sm"
+                >
+                  Close chat
+                </button>
+              </span>
+            ) : null}
+          </span>
         </header>
 
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+          <p className="text-ps-ink-subtle text-center text-xs">Today</p>
+
           {bubbles.map((bubble) => (
             <div
               key={bubble.id}
@@ -144,17 +223,54 @@ export function StorefrontChat({
                 bubble.role === "customer" ? "justify-end" : "justify-start",
               )}
             >
-              <p
+              <div
                 className={cn(
-                  "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-6 whitespace-pre-wrap",
+                  "max-w-[88%] rounded-2xl px-3.5 py-2.5 text-sm leading-6",
                   bubble.role === "customer"
-                    ? "bg-ps-brand-deep rounded-br-sm text-white"
-                    : "bg-ps-page text-ps-ink border-ps-edge rounded-bl-sm border",
-                  bubble.orderNumber ? "ring-2 ring-emerald-500/40" : null,
+                    ? "bg-ps-panel-soft text-ps-ink rounded-br-sm"
+                    : "bg-ps-brand rounded-bl-sm text-white",
                 )}
               >
-                {bubble.text}
-              </p>
+                <p className="whitespace-pre-wrap">{bubble.text}</p>
+
+                {bubble.orderNumber ? (
+                  <p className="mt-2 flex items-center gap-1.5 rounded-lg bg-white/15 px-2.5 py-1.5 text-xs font-medium">
+                    <Check className="size-3.5 shrink-0" aria-hidden="true" />
+                    Order {bubble.orderNumber}
+                  </p>
+                ) : null}
+
+                {bubble.cards?.length ? (
+                  <ul className="mt-2.5 space-y-2">
+                    {bubble.cards.map((card) => (
+                      <li
+                        key={card.variantId}
+                        className="rounded-xl bg-white/15 p-3"
+                      >
+                        <p className="text-sm font-semibold">
+                          {card.productName}
+                        </p>
+                        <p className="text-xs text-white/85">
+                          {card.price} · {card.stockLabel}
+                        </p>
+                        <button
+                          type="button"
+                          disabled={isPending || card.available <= 0}
+                          onClick={() =>
+                            send(
+                              `${card.actionLabel}: ${card.productName}`,
+                              card.variantId,
+                            )
+                          }
+                          className="text-ps-brand-deep mt-2.5 h-9 w-full rounded-lg bg-white text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+                        >
+                          {card.actionLabel}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             </div>
           ))}
 

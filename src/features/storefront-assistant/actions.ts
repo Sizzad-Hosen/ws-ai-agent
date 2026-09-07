@@ -5,7 +5,11 @@ import { z } from "zod";
 import { tenantSlugSchema } from "@/features/tenant-dashboard/schemas";
 import { resolveTenant } from "@/server/tenancy/resolve-tenant";
 
-import { respondToCustomer, type AssistantTurn } from "./agent";
+import {
+  respondToCustomer,
+  type AssistantTurn,
+  type ProductCard,
+} from "./agent";
 import { readDraft, writeDraft } from "./session";
 import { loadAssistantSettings } from "./settings";
 
@@ -35,6 +39,11 @@ const requestSchema = z.object({
   slug: tenantSlugSchema,
   message: z.string().trim().min(1).max(1000),
   history: z.array(turnSchema).max(20).default([]),
+  /**
+   * The product card the shopper tapped, if they tapped one. An id, never a
+   * price — the row it names is re-read before anything is quoted from it.
+   */
+  selectVariantId: z.uuid().nullish().default(null),
 });
 
 export interface AssistantActionResult {
@@ -42,6 +51,7 @@ export interface AssistantActionResult {
   readonly reply: string;
   readonly orderNumber: string | null;
   readonly quickReplies: readonly string[];
+  readonly cards: readonly ProductCard[];
 }
 
 /**
@@ -86,10 +96,11 @@ export async function sendAssistantMessageAction(
       reply: "Sorry, I did not catch that. Could you say it again?",
       orderNumber: null,
       quickReplies: [],
+      cards: [],
     };
   }
 
-  const { slug, message, history } = parsed.data;
+  const { slug, message, history, selectVariantId } = parsed.data;
   const resolution = await resolveTenant(slug);
 
   if (!resolution.ok) {
@@ -98,6 +109,7 @@ export async function sendAssistantMessageAction(
       reply: "This shop is not taking messages right now.",
       orderNumber: null,
       quickReplies: [],
+      cards: [],
     };
   }
 
@@ -111,6 +123,7 @@ export async function sendAssistantMessageAction(
         "You are sending messages faster than I can answer. Please wait a moment.",
       orderNumber: null,
       quickReplies: [],
+      cards: [],
     };
   }
 
@@ -123,6 +136,7 @@ export async function sendAssistantMessageAction(
       draft,
       message,
       history: history as readonly AssistantTurn[],
+      selectVariantId,
     });
 
     await writeDraft(slug, outcome.draft);
@@ -132,6 +146,7 @@ export async function sendAssistantMessageAction(
       reply: outcome.reply,
       orderNumber: outcome.orderNumber,
       quickReplies: outcome.quickReplies,
+      cards: outcome.cards,
     };
   } catch (error: unknown) {
     // Logged with the tenant, never with the message: a shopper's address and
@@ -147,6 +162,7 @@ export async function sendAssistantMessageAction(
         "Something went wrong on our side. Please try again, or contact the shop directly.",
       orderNumber: null,
       quickReplies: [],
+      cards: [],
     };
   }
 }
