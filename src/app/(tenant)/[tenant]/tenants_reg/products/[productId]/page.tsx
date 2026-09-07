@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader, Field } from "@/components/ui/card";
 import { TenantShell } from "@/features/tenant-dashboard/components/tenant-shell";
-import { TENANT_CURRENCY } from "@/features/tenant-dashboard/money";
+import { loadStoreCurrency } from "@/features/storefront-assistant/settings";
 import { ProductVariantsManager } from "@/features/tenant-dashboard/products/components/product-variants-manager";
 import { findProduct } from "@/features/tenant-dashboard/products/service";
 import { tenantHref } from "@/features/tenant-dashboard/routes";
@@ -27,7 +27,10 @@ export default async function ProductPage({
   const { tenant: slug, productId } = await params;
   const { tenant, user } = await requireTenantPage(slug);
 
-  const product = await findProduct(tenant.db, productId);
+  const [product, currency] = await Promise.all([
+    findProduct(tenant.db, productId),
+    loadStoreCurrency(tenant.db),
+  ]);
 
   // A product id that names nothing in this tenant's database is a 404, the
   // same as an id from another tenant — which is all one connection can see.
@@ -61,11 +64,11 @@ export default async function ProductPage({
             {product.categoryName ?? "Uncategorised"}
           </Field>
           <Field label="Base price">
-            {formatMoney(product.basePrice, TENANT_CURRENCY) ?? product.basePrice}
+            {formatMoney(product.basePrice, currency) ?? product.basePrice}
           </Field>
           <Field label="Compare at">
             {product.compareAtPrice
-              ? formatMoney(product.compareAtPrice, TENANT_CURRENCY)
+              ? formatMoney(product.compareAtPrice, currency)
               : "—"}
           </Field>
           <Field label="Added">{formatDate(product.createdAt)}</Field>
@@ -76,7 +79,7 @@ export default async function ProductPage({
         slug={tenant.slug}
         productId={product.id}
         variants={product.variants}
-        currency={TENANT_CURRENCY}
+        currency={currency}
       />
     </TenantShell>
   );

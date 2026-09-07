@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { TenantShell } from "@/features/tenant-dashboard/components/tenant-shell";
-import { TENANT_CURRENCY } from "@/features/tenant-dashboard/money";
+import { loadStoreCurrency } from "@/features/storefront-assistant/settings";
 import { OrdersManager } from "@/features/tenant-dashboard/orders/components/orders-manager";
 import { orderListQuerySchema } from "@/features/tenant-dashboard/orders/schemas";
 import { listOrders } from "@/features/tenant-dashboard/orders/service";
@@ -22,7 +22,10 @@ export default async function OrdersPage({
   const { tenant, user } = await requireTenantPage(slug);
 
   const query = orderListQuerySchema.parse(toQueryRecord(await searchParams));
-  const result = await listOrders(tenant.db, query);
+  const [result, currency] = await Promise.all([
+    listOrders(tenant.db, query),
+    loadStoreCurrency(tenant.db),
+  ]);
 
   return (
     <TenantShell
@@ -43,7 +46,7 @@ export default async function OrdersPage({
         offset={result.offset}
         search={query.search ?? ""}
         status={query.status ?? ""}
-        currency={TENANT_CURRENCY}
+        currency={currency}
       />
     </TenantShell>
   );

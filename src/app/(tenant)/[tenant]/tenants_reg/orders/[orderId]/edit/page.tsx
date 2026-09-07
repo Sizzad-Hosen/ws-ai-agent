@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { TenantShell } from "@/features/tenant-dashboard/components/tenant-shell";
 import { listCustomerOptions } from "@/features/tenant-dashboard/customers/service";
-import { TENANT_CURRENCY } from "@/features/tenant-dashboard/money";
+import { loadStoreCurrency } from "@/features/storefront-assistant/settings";
 import { OrderForm } from "@/features/tenant-dashboard/orders/components/order-form";
 import { findOrder } from "@/features/tenant-dashboard/orders/service";
 import { listVariantOptions } from "@/features/tenant-dashboard/products/service";
@@ -32,12 +32,13 @@ export default async function EditOrderPage({
   // The pickers are told what this order already holds, so a line against an
   // archived variant, or an order against a blocked customer, still shows the
   // value it has instead of quietly falling back to blank.
-  const [customers, variants] = await Promise.all([
+  const [customers, variants, currency] = await Promise.all([
     listCustomerOptions(tenant.db, order.customerId ? [order.customerId] : []),
     listVariantOptions(
       tenant.db,
       order.items.map((item) => item.productVariantId),
     ),
+    loadStoreCurrency(tenant.db),
   ]);
 
   return (
@@ -63,7 +64,7 @@ export default async function EditOrderPage({
         slug={tenant.slug}
         customers={customers}
         variants={variants}
-        currency={TENANT_CURRENCY}
+        currency={currency}
         initial={{
           id: order.id,
           customerId: order.customerId,

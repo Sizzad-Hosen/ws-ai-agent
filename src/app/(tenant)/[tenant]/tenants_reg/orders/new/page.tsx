@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/page-header";
 import { TenantShell } from "@/features/tenant-dashboard/components/tenant-shell";
 import { listCustomerOptions } from "@/features/tenant-dashboard/customers/service";
-import { TENANT_CURRENCY } from "@/features/tenant-dashboard/money";
+import { loadStoreCurrency } from "@/features/storefront-assistant/settings";
 import { OrderForm } from "@/features/tenant-dashboard/orders/components/order-form";
 import { listVariantOptions } from "@/features/tenant-dashboard/products/service";
 import { tenantHref } from "@/features/tenant-dashboard/routes";
@@ -20,9 +20,10 @@ export default async function NewOrderPage({
   const { tenant: slug } = await params;
   const { tenant, user } = await requireTenantPage(slug);
 
-  const [customers, variants] = await Promise.all([
+  const [customers, variants, currency] = await Promise.all([
     listCustomerOptions(tenant.db),
     listVariantOptions(tenant.db),
+    loadStoreCurrency(tenant.db),
   ]);
 
   return (
@@ -44,7 +45,7 @@ export default async function NewOrderPage({
         slug={tenant.slug}
         customers={customers}
         variants={variants}
-        currency={TENANT_CURRENCY}
+        currency={currency}
         initial={{
           id: null,
           customerId: null,

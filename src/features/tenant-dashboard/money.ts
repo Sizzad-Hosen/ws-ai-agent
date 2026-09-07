@@ -46,12 +46,3 @@ export function fromCents(cents: number): string {
 export function toAmount(value: { toString(): string }): string {
   return fromCents(toCents(value.toString()));
 }
-
-/**
- * The currency every tenant screen formats in.
- *
- * The tenant schema records a currency per payment, not per store, so there is
- * no store default to read yet. One constant, so the day a store setting
- * arrives there is a single place that has to change.
- */
-export const TENANT_CURRENCY = "USD";

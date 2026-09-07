@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/page-header";
 import { listCategoryOptions } from "@/features/tenant-dashboard/categories/service";
 import { TenantShell } from "@/features/tenant-dashboard/components/tenant-shell";
-import { TENANT_CURRENCY } from "@/features/tenant-dashboard/money";
+import { loadStoreCurrency } from "@/features/storefront-assistant/settings";
 import { ProductsManager } from "@/features/tenant-dashboard/products/components/products-manager";
 import { productListQuerySchema } from "@/features/tenant-dashboard/products/schemas";
 import { listProducts } from "@/features/tenant-dashboard/products/service";
@@ -24,9 +24,10 @@ export default async function ProductsPage({
 
   const query = productListQuerySchema.parse(toQueryRecord(await searchParams));
 
-  const [result, categories] = await Promise.all([
+  const [result, categories, currency] = await Promise.all([
     listProducts(tenant.db, query),
     listCategoryOptions(tenant.db),
+    loadStoreCurrency(tenant.db),
   ]);
 
   return (
@@ -50,7 +51,7 @@ export default async function ProductsPage({
         search={query.search ?? ""}
         status={query.status ?? ""}
         categoryId={query.categoryId ?? ""}
-        currency={TENANT_CURRENCY}
+        currency={currency}
       />
     </TenantShell>
   );

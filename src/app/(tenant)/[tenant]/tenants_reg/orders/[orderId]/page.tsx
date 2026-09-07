@@ -17,7 +17,7 @@ import {
   TableScroller,
 } from "@/components/ui/table";
 import { TenantShell } from "@/features/tenant-dashboard/components/tenant-shell";
-import { TENANT_CURRENCY } from "@/features/tenant-dashboard/money";
+import { loadStoreCurrency } from "@/features/storefront-assistant/settings";
 import { findOrder } from "@/features/tenant-dashboard/orders/service";
 import {
   tenantHref,
@@ -43,13 +43,16 @@ export default async function OrderPage({
   const { tenant: slug, orderId } = await params;
   const { tenant, user } = await requireTenantPage(slug);
 
-  const order = await findOrder(tenant.db, orderId);
+  const [order, currency] = await Promise.all([
+    findOrder(tenant.db, orderId),
+    loadStoreCurrency(tenant.db),
+  ]);
 
   // An order id that names nothing in this tenant's database is a 404, the
   // same as an id from another tenant — which is all one connection can see.
   if (!order) notFound();
 
-  const money = (amount: string) => formatMoney(amount, TENANT_CURRENCY) ?? amount;
+  const money = (amount: string) => formatMoney(amount, currency) ?? amount;
 
   return (
     <TenantShell

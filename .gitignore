@@ -44,3 +44,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 src/generated/
+
+# Reference project, not part of this application. Contains its own .env.
+WhatsApp_AI-/

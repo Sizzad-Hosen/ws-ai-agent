@@ -7,8 +7,17 @@ import { cache, type ReactNode } from "react";
 import { APP_CONFIG } from "@/config/app";
 import { isReservedTenantSlug } from "@/constants/reserved-slugs";
 import { ROUTES } from "@/constants/routes";
+import { listStorefrontVariants } from "@/features/storefront-assistant/catalogue";
+import { StorefrontChat } from "@/features/storefront-assistant/components/storefront-chat";
+import {
+  loadAssistantSettings,
+  type AssistantSettings,
+} from "@/features/storefront-assistant/settings";
+import type { StorefrontVariant } from "@/features/storefront-assistant/catalogue";
 import { repositories } from "@/server/repositories";
 import type { TenantSite } from "@/server/repositories/contracts/tenant-repository";
+import { resolveTenant } from "@/server/tenancy/resolve-tenant";
+import { formatMoney } from "@/utils/format";
 
 /** Digits only, as wa.me expects. */
 function whatsappLink(number: string): string {
@@ -45,6 +54,11 @@ export default async function TenantSitePage({
 
   const live = site.databaseStatus === "ready";
   const chat = whatsappLink(site.whatsappNumber);
+  // Everything below this line comes from the tenant's own database, through
+  // the same resolver the dashboard uses. A storefront can therefore only ever
+  // show its own shop's catalogue — there is no query here that could reach
+  // another tenant's rows.
+  const shop = live ? await loadShopfront(site.slug) : null;
 
   return (
     <>
@@ -72,8 +86,8 @@ export default async function TenantSitePage({
             {site.businessName}
           </h1>
           <p className="text-ps-ink-muted mt-5 max-w-xl text-lg">
-            Ask about anything in stock, get a price, and order — all on
-            WhatsApp. The assistant answers in seconds, day or night.
+            Ask about anything in stock, get a price, and order — right here or
+            on WhatsApp. The assistant answers in seconds, day or night.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-4">
@@ -106,6 +120,38 @@ export default async function TenantSitePage({
           )}
         </section>
 
+        {shop && shop.variants.length > 0 ? (
+          <section className="container-ps pb-16">
+            <h2 className="text-ps-ink font-display text-2xl font-semibold tracking-tight">
+              In stock now
+            </h2>
+            <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {shop.variants.map((variant) => (
+                <li
+                  key={variant.variantId}
+                  className="border-ps-edge bg-ps-panel rounded-2xl border p-5"
+                >
+                  <p className="text-ps-ink font-medium">
+                    {variant.productName}
+                  </p>
+                  <p className="text-ps-ink-subtle mt-1 text-xs">
+                    {variant.categoryName ?? variant.sku}
+                  </p>
+                  <p className="text-ps-ink mt-4 text-lg font-semibold">
+                    {formatMoney(variant.price, shop.settings.currency) ??
+                      variant.price}
+                  </p>
+                  <p className="text-ps-ink-subtle mt-1 text-xs">
+                    {variant.available > 0
+                      ? `${variant.available} available`
+                      : "Out of stock"}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         <section className="border-ps-edge bg-ps-panel border-y">
           <div className="container-ps grid gap-8 py-12 sm:grid-cols-3">
             <Fact
@@ -128,8 +174,58 @@ export default async function TenantSitePage({
       </main>
 
       <SiteFooter businessName={site.businessName} />
+
+      {shop?.settings.enabled ? (
+        <StorefrontChat
+          slug={site.slug}
+          businessName={site.businessName}
+          greeting={greetingFor(site.businessName, shop.settings)}
+          openingQuestions={[
+            "What do you sell?",
+            "Delivery charge?",
+            "কী কী আছে?",
+          ]}
+        />
+      ) : null}
     </>
   );
+}
+
+/**
+ * The tenant's own catalogue and assistant settings.
+ *
+ * Failures are swallowed into `null`: a database that is provisioned but
+ * momentarily unreachable should cost the shop its chat widget for one
+ * request, not its whole page.
+ */
+async function loadShopfront(slug: string): Promise<{
+  readonly settings: AssistantSettings;
+  readonly variants: readonly StorefrontVariant[];
+} | null> {
+  try {
+    const resolution = await resolveTenant(slug);
+
+    if (!resolution.ok) return null;
+
+    const [settings, variants] = await Promise.all([
+      loadAssistantSettings(resolution.tenant.db),
+      listStorefrontVariants(resolution.tenant.db, 4),
+    ]);
+
+    return { settings, variants };
+  } catch (error: unknown) {
+    console.error(`Could not load the storefront for ${slug}.`, error);
+    return null;
+  }
+}
+
+function greetingFor(
+  businessName: string,
+  settings: AssistantSettings,
+): string {
+  return settings.greeting.trim() !== ""
+    ? settings.greeting
+    : `Welcome to ${businessName}. Ask me about products, prices or stock — I can take your order right here.`;
 }
 
 export async function generateMetadata({

@@ -18,7 +18,7 @@ import {
 import { TenantShell } from "@/features/tenant-dashboard/components/tenant-shell";
 import { CustomerAddressesManager } from "@/features/tenant-dashboard/customers/components/customer-addresses-manager";
 import { findCustomer } from "@/features/tenant-dashboard/customers/service";
-import { TENANT_CURRENCY } from "@/features/tenant-dashboard/money";
+import { loadStoreCurrency } from "@/features/storefront-assistant/settings";
 import {
   tenantHref,
   tenantRecordHref,
@@ -43,7 +43,10 @@ export default async function CustomerPage({
   const { tenant: slug, customerId } = await params;
   const { tenant, user } = await requireTenantPage(slug);
 
-  const customer = await findCustomer(tenant.db, customerId);
+  const [customer, currency] = await Promise.all([
+    findCustomer(tenant.db, customerId),
+    loadStoreCurrency(tenant.db),
+  ]);
 
   // A customer id that names nothing in this tenant's database is a 404, the
   // same as an id from another tenant — which is all one connection can see.
@@ -122,7 +125,7 @@ export default async function CustomerPage({
                       {formatDate(order.placedAt)}
                     </TD>
                     <TD numeric>
-                      {formatMoney(order.total, TENANT_CURRENCY) ?? order.total}
+                      {formatMoney(order.total, currency) ?? order.total}
                     </TD>
                     <TD>
                       <Badge tone={ORDER_STATUS_TONES[order.status]}>
