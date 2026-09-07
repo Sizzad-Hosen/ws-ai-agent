@@ -401,7 +401,34 @@ async function main(): Promise<void> {
       "An invalid phone number was accepted.",
     );
 
-    turn = await say(shopA, turn.draft, "01712345678");
+    // A shopper mid-checkout who asks something else gets an answer, not the
+    // phone-number complaint — the state the widget's log showed them stuck in.
+    const asked = await say(shopA, turn.draft, "What do you sell?");
+    check(
+      offered(asked.cards).includes("Iced Coffee"),
+      `A catalogue question mid-checkout was not answered: ${asked.reply}`,
+    );
+    check(
+      !asked.reply.includes("mobile number"),
+      `A catalogue question was treated as a phone number: ${asked.reply}`,
+    );
+    check(
+      asked.draft.state === "awaiting_phone",
+      "An aside lost the checkout's place.",
+    );
+    check(
+      asked.reply.includes("CANCEL"),
+      "The aside did not offer a way out of the checkout.",
+    );
+
+    const askedBangla = await say(shopA, asked.draft, "ডেলিভারি চার্জ কত?");
+    check(
+      askedBangla.reply.includes("80") &&
+        askedBangla.draft.state === "awaiting_phone",
+      `A delivery question mid-checkout went wrong: ${askedBangla.reply}`,
+    );
+
+    turn = await say(shopA, askedBangla.draft, "01712345678");
     check(
       turn.draft.state === "awaiting_address" &&
         turn.draft.customerPhone === "+8801712345678",

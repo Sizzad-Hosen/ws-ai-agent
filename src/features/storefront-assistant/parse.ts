@@ -52,23 +52,35 @@ export function extractQuantity(message: string): number | null {
 }
 
 /**
- * A Bangladesh mobile number, normalised to +88 form.
+ * A phone number the shop can call, normalised.
  *
- * Deliberately narrow. A looser pattern matches order numbers and postcodes,
- * and a delivery that goes to a postcode is a delivery that does not arrive.
+ * A Bangladesh mobile is recognised first and normalised to +88, because that
+ * is what almost every number typed into these shops is and because the local
+ * form ("01712345678") carries no country code to infer one from.
+ *
+ * Anything else is accepted only in explicit international form — a leading
+ * "+" and 8 to 15 digits. That deliberately refuses a bare string of digits
+ * that is not a Bangladesh mobile: an order number, a postcode and a house
+ * number are all bare digits, and a delivery sent to a postcode is a delivery
+ * that does not arrive. It does not refuse the customer abroad, which the
+ * Bangladesh-only version did.
  */
 export function extractPhone(message: string): string | null {
   const compact = toAsciiDigits(message).replace(/[\s()-]/g, "");
-  const match = /(?:\+?88)?01[3-9]\d{8}/.exec(compact);
+  const bangladesh = /(?:\+?88)?01[3-9]\d{8}/.exec(compact);
 
-  if (!match) return null;
+  if (bangladesh) {
+    const number = bangladesh[0];
 
-  const number = match[0];
+    if (number.startsWith("01")) return `+88${number}`;
+    if (number.startsWith("8801")) return `+${number}`;
 
-  if (number.startsWith("01")) return `+88${number}`;
-  if (number.startsWith("8801")) return `+${number}`;
+    return number;
+  }
 
-  return number;
+  const international = /\+\d{8,15}/.exec(compact);
+
+  return international ? international[0] : null;
 }
 
 /** The one phrase that turns a summary into an order, in all three languages. */
@@ -143,6 +155,10 @@ export function isCatalogueQuery(message: string): boolean {
   const bangla =
     /(পণ্য|প্রোডাক্ট|আইটেম)/.test(text) &&
     /(কি|কী|কোন|আছে|দেখান|দেখাও)/.test(text);
+  // "কী কী আছে?" — a repeated interrogative and "আছে", with no noun at all.
+  // The commonest way the question is actually asked, and the earlier pattern
+  // wanted a word for "product" that nobody types.
+  const banglaBare = /(কি|কী)\s+(কি|কী)\s*(আছে|ache|ase)/.test(text);
 
-  return english || banglish || bangla;
+  return english || banglish || bangla || banglaBare;
 }

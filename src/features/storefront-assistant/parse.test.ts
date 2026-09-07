@@ -54,9 +54,18 @@ describe("extractPhone", () => {
     expect(extractPhone("০১৭১২৩৪৫৬৭৮")).toBe("+8801712345678");
   });
 
+  it("accepts a customer abroad, in explicit international form", () => {
+    expect(extractPhone("+971501234567")).toBe("+971501234567");
+    expect(extractPhone("call me on +44 7700 900123")).toBe("+447700900123");
+  });
+
   it("rejects anything that is not one", () => {
+    // Bare digits that are not a Bangladesh mobile stay refused: an order
+    // number, a postcode and a house number are all bare digits, and a
+    // delivery sent to a postcode does not arrive.
     expect(extractPhone("1234")).toBeNull();
     expect(extractPhone("02123456789")).toBeNull();
+    expect(extractPhone("1200")).toBeNull();
     expect(extractPhone("no number here")).toBeNull();
   });
 });
@@ -92,6 +101,15 @@ describe("isCatalogueQuery", () => {
     expect(isCatalogueQuery("what products do you have?")).toBe(true);
     expect(isCatalogueQuery("ki ki product ache")).toBe(true);
     expect(isCatalogueQuery("আপনাদের কি কি পণ্য আছে?")).toBe(true);
+  });
+
+  it("recognises the bare Bangla form, with no word for 'product'", () => {
+    // How the question is actually typed. The earlier pattern wanted a noun
+    // nobody uses, so this fell through to the product search — and, mid
+    // checkout, into the phone-number parser.
+    expect(isCatalogueQuery("কী কী আছে?")).toBe(true);
+    expect(isCatalogueQuery("কি কি আছে")).toBe(true);
+    expect(isCatalogueQuery("ki ki ache")).toBe(true);
   });
 
   it("does not swallow a specific product question", () => {

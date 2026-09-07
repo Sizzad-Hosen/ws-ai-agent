@@ -13,7 +13,10 @@ import { useEffect, useRef, useState, useTransition } from "react";
 
 import { cn } from "@/lib/utils";
 
-import { sendAssistantMessageAction } from "@/features/storefront-assistant/actions";
+import {
+  resetAssistantDraftAction,
+  sendAssistantMessageAction,
+} from "@/features/storefront-assistant/actions";
 import type {
   AssistantTurn,
   ProductCard,
@@ -128,9 +131,13 @@ export function StorefrontChat({
     setBubbles([{ id: "greeting", role: "assistant", text: greeting }]);
     setQuickReplies(openingQuestions);
     setDraft("");
-    // The server's draft order is deliberately left alone: clearing the
-    // visible transcript is a tidy-up, and "cancel" is the word that abandons
-    // an order in progress.
+
+    // The half-finished order goes too. Clearing only the transcript left a
+    // shopper looking at a fresh chat while the server still read every
+    // message as the answer to a question they could no longer see.
+    startTransition(async () => {
+      await resetAssistantDraftAction(slug);
+    });
   }
 
   return (

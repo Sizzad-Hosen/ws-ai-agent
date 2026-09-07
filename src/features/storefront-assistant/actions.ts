@@ -10,7 +10,7 @@ import {
   type AssistantTurn,
   type ProductCard,
 } from "./agent";
-import { readDraft, writeDraft } from "./session";
+import { clearDraft, readDraft, writeDraft } from "./session";
 import { loadAssistantSettings } from "./settings";
 
 /**
@@ -165,4 +165,25 @@ export async function sendAssistantMessageAction(
       cards: [],
     };
   }
+}
+
+/**
+ * Abandons whatever order the shopper had in progress.
+ *
+ * Behind "Start over" in the chat's menu. It used to clear only the visible
+ * transcript, on the reasoning that "cancel" is the word that abandons an
+ * order — which left a shopper who had reached the phone-number step with a
+ * fresh-looking chat and a server that still read every message as a phone
+ * number. A menu item called Start over has to start over.
+ */
+export async function resetAssistantDraftAction(
+  slug: unknown,
+): Promise<{ readonly ok: boolean }> {
+  const parsed = tenantSlugSchema.safeParse(slug);
+
+  if (!parsed.success) return { ok: false };
+
+  await clearDraft(parsed.data);
+
+  return { ok: true };
 }

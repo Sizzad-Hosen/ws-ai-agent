@@ -762,6 +762,16 @@ async function advanceCheckout(
   const { db, settings } = context;
   const message = context.message.trim();
 
+  // A shopper mid-checkout is still a shopper. Asked what the shop sells, or
+  // what delivery costs, they are plainly not answering the question they were
+  // asked — and feeding "What do you sell?" to the phone-number parser told
+  // them their catalogue question did not look like a mobile number. These
+  // questions are answered without consuming the step, and the reply says
+  // what is still needed so the thread is not lost.
+  const aside = await answerAside(context, draft, language);
+
+  if (aside) return aside;
+
   switch (draft.state) {
     case "awaiting_variant": {
       const variants = await searchStorefrontVariants(db, message);
@@ -804,12 +814,12 @@ async function advanceCheckout(
           draft,
           choose(
             language,
-            "Please tell me how many — a number like 2.",
-            "কতটি নেবেন সংখ্যায় লিখুন, যেমন ২।",
-            "Koyti neben number-e likhun, jemon 2.",
+            "Please tell me how many — a number like 2. Or type CANCEL to start again.",
+            "কতটি নেবেন সংখ্যায় লিখুন, যেমন ২। অথবা আবার শুরু করতে CANCEL লিখুন।",
+            "Koyti neben number-e likhun, jemon 2. Ba abar shuru korte CANCEL likhun.",
           ),
           "checkout",
-          { quickReplies: ["1", "2", "3"] },
+          { quickReplies: ["1", "2", "3", cancelPhrase(language)] },
         );
       }
 
@@ -844,11 +854,12 @@ async function advanceCheckout(
           draft,
           choose(
             language,
-            "Please send the name the order should be under.",
-            "অর্ডারটি যার নামে হবে সেই নামটি লিখুন।",
-            "Order jar name-e hobe sei name-ta likhun.",
+            "Please send the name the order should be under. Or type CANCEL to start again.",
+            "অর্ডারটি যার নামে হবে সেই নামটি লিখুন। অথবা আবার শুরু করতে CANCEL লিখুন।",
+            "Order jar name-e hobe sei name-ta likhun. Ba abar shuru korte CANCEL likhun.",
           ),
           "checkout",
+          { quickReplies: [cancelPhrase(language)] },
         );
       }
 
@@ -872,11 +883,12 @@ async function advanceCheckout(
           draft,
           choose(
             language,
-            "That does not look like a mobile number. Please send it like 01XXXXXXXXX.",
-            "এটি মোবাইল নম্বরের মতো মনে হচ্ছে না। 01XXXXXXXXX এভাবে লিখুন।",
-            "Eta mobile number-er moto mone hocche na. 01XXXXXXXXX evabe likhun.",
+            "I need a phone number to arrange delivery — 01XXXXXXXXX, or with a country code. Or type CANCEL to start again.",
+            "ডেলিভারির জন্য একটি ফোন নম্বর দরকার — 01XXXXXXXXX, বা কান্ট্রি কোডসহ। অথবা আবার শুরু করতে CANCEL লিখুন।",
+            "Delivery-r jonno ekta phone number dorkar — 01XXXXXXXXX, ba country code shoho. Ba abar shuru korte CANCEL likhun.",
           ),
           "checkout",
+          { quickReplies: [cancelPhrase(language)] },
         );
       }
 
@@ -898,11 +910,12 @@ async function advanceCheckout(
           draft,
           choose(
             language,
-            "Please send a fuller address — house or road, area, and city.",
-            "আরও সম্পূর্ণ ঠিকানা লিখুন — বাসা বা রোড, এলাকা এবং শহর।",
-            "Aro complete address likhun — basa ba road, area ebong city.",
+            "Please send a fuller address — house or road, area, and city. Or type CANCEL to start again.",
+            "আরও সম্পূর্ণ ঠিকানা লিখুন — বাসা বা রোড, এলাকা এবং শহর। অথবা আবার শুরু করতে CANCEL লিখুন।",
+            "Aro complete address likhun — basa ba road, area ebong city. Ba abar shuru korte CANCEL likhun.",
           ),
           "checkout",
+          { quickReplies: [cancelPhrase(language)] },
         );
       }
 
@@ -987,6 +1000,99 @@ async function advanceCheckout(
 
     default:
       return restart(draft, language);
+  }
+}
+
+/**
+ * Questions that are safe to answer mid-checkout.
+ *
+ * Only the ones that cannot be mistaken for an answer to the pending step: a
+ * catalogue query and a delivery-charge question. A message that might be a
+ * name, a quantity, an address or a phone number is left to the step, because
+ * guessing wrong there is how an address ends up in the name field.
+ */
+async function answerAside(
+  context: AssistantContext,
+  draft: AssistantDraft,
+  language: Language,
+): Promise<AssistantReply | null> {
+  const { db, settings } = context;
+
+  if (isDeliveryQuestion(context.message)) {
+    return reply(
+      draft,
+      `${deliveryAnswer(settings, language)}
+
+${pendingPrompt(draft, language)}`,
+      "knowledge",
+    );
+  }
+
+  if (isCatalogueQuery(context.message)) {
+    const variants = await listStorefrontVariants(db);
+
+    return reply(
+      draft,
+      `${catalogueLead(variants, language)}
+
+${pendingPrompt(draft, language)}`,
+      "catalogue",
+      { cards: toCards(variants, settings, language) },
+    );
+  }
+
+  return null;
+}
+
+/** What the checkout is still waiting for, restated after an aside. */
+function pendingPrompt(draft: AssistantDraft, language: Language): string {
+  const tail = choose(
+    language,
+    "Type CANCEL if you would rather start again.",
+    "আবার শুরু করতে চাইলে CANCEL লিখুন।",
+    "Abar shuru korte chaile CANCEL likhun.",
+  );
+
+  const asking = (english: string, bangla: string, banglish: string) =>
+    `${choose(language, english, bangla, banglish)} ${tail}`;
+
+  switch (draft.state) {
+    case "awaiting_quantity":
+      return asking(
+        "Back to your order — how many would you like?",
+        "আপনার অর্ডারে ফিরি — কতটি নিতে চান?",
+        "Apnar order-e firi — koyti niben?",
+      );
+    case "awaiting_name":
+      return asking(
+        "Back to your order — what name should it be under?",
+        "আপনার অর্ডারে ফিরি — কার নামে হবে?",
+        "Apnar order-e firi — kar name-e hobe?",
+      );
+    case "awaiting_phone":
+      return asking(
+        "Back to your order — what phone number should we call?",
+        "আপনার অর্ডারে ফিরি — কোন নম্বরে কল করব?",
+        "Apnar order-e firi — kon number-e call korbo?",
+      );
+    case "awaiting_address":
+      return asking(
+        "Back to your order — where should we deliver it?",
+        "আপনার অর্ডারে ফিরি — কোথায় ডেলিভারি করব?",
+        "Apnar order-e firi — kothay delivery korbo?",
+      );
+    case "awaiting_confirmation":
+      return asking(
+        "Your order is ready — reply CONFIRM ORDER to place it.",
+        "আপনার অর্ডার প্রস্তুত — করতে CONFIRM ORDER লিখুন।",
+        "Apnar order ready — korte CONFIRM ORDER likhun.",
+      );
+    default:
+      return asking(
+        "Back to your order — which product did you want?",
+        "আপনার অর্ডারে ফিরি — কোন পণ্যটি চেয়েছিলেন?",
+        "Apnar order-e firi — kon product cheyechilen?",
+      );
   }
 }
 
