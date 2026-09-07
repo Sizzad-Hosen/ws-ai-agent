@@ -21,6 +21,7 @@ import {
   isCancellation,
   isCatalogueQuery,
   isConfirmation,
+  isDeliveryQuestion,
 } from "./parse";
 import { newDraft, type AssistantDraft } from "./session";
 import type { AssistantSettings } from "./settings";
@@ -152,6 +153,7 @@ export async function respondToCustomer(
   // exact row instead of searching for whatever the button's label said. The
   // id is still re-read from the catalogue — a card rendered five minutes ago
   // may be quoting a price that has since changed.
+
   if (context.selectVariantId) {
     const chosen = await findStorefrontVariant(
       context.db,
@@ -229,6 +231,16 @@ async function answerDeterministically(
     return reply(draft, catalogueLead(variants, language), "catalogue", {
       cards: toCards(variants, settings, language),
       quickReplies: variants.length === 0 ? [] : deliveryQuickReply(language),
+    });
+  }
+
+  // The shop already told us its delivery charges when it set the assistant
+  // up, so this question is answered from settings rather than searched for.
+  // It used to fall through to the product search and come back with nothing,
+  // which is a poor answer to the second most common question in any shop.
+  if (isDeliveryQuestion(context.message)) {
+    return reply(draft, deliveryAnswer(settings, language), "knowledge", {
+      quickReplies: catalogueQuickReplies(language),
     });
   }
 
@@ -544,22 +556,25 @@ async function runTool(
       const question =
         typeof input.question === "string" ? input.question : context.message;
       const matches = await searchKnowledge(context.db, question);
+      // The shop's own terms go out on every call, matched FAQ or not: these
+      // are settings the owner filled in, and a model should not be stuck for
+      // an answer about delivery because nobody wrote a FAQ entry for it.
+      const facts = shopFacts(context.settings);
 
       if (matches.length === 0) {
         return {
-          result:
-            "The shop has not published an answer to this. Say you will check with the shop rather than guessing.",
+          result: `${facts}\n\nThe shop has published no written answer to this. Answer from the terms above if they cover it; otherwise say you will check with the shop rather than guessing.`,
         };
       }
 
-      return {
-        result: matches
-          .map(
-            ({ entry }) =>
-              `Q: ${entry.question}\nA: ${entry.answer}${entry.answerBangla ? `\nA (Bangla): ${entry.answerBangla}` : ""}`,
-          )
-          .join("\n\n"),
-      };
+      const written = matches
+        .map(
+          ({ entry }) =>
+            `Q: ${entry.question}\nA: ${entry.answer}${entry.answerBangla ? `\nA (Bangla): ${entry.answerBangla}` : ""}`,
+        )
+        .join("\n\n");
+
+      return { result: `${facts}\n\n${written}` };
     }
 
     case "start_order": {
@@ -1023,6 +1038,59 @@ function placementFailureText(
 }
 
 // ------------------------------------------------------------------ formatting
+
+/**
+ * The delivery charges, as the shop set them.
+ *
+ * Two rates when the shop named a home city, one when it did not. Payment is
+ * stated because cash on delivery is what the checkout writes, and a shopper
+ * asking about delivery is usually asking about paying too.
+ */
+function deliveryAnswer(
+  settings: AssistantSettings,
+  language: Language,
+): string {
+  const inside = money(settings.deliveryInsideCity, settings);
+  const outside = money(settings.deliveryOutsideCity, settings);
+  const city = settings.homeCity.trim();
+
+  if (
+    city === "" ||
+    settings.deliveryInsideCity === settings.deliveryOutsideCity
+  ) {
+    return choose(
+      language,
+      `Delivery is ${outside}, and payment is cash on delivery.`,
+      `ডেলিভারি চার্জ ${outside}, পেমেন্ট ক্যাশ অন ডেলিভারি।`,
+      `Delivery charge ${outside}, payment cash on delivery.`,
+    );
+  }
+
+  return choose(
+    language,
+    `Delivery inside ${city} is ${inside}, and ${outside} anywhere else. Payment is cash on delivery.`,
+    `${city}-এর ভেতরে ডেলিভারি চার্জ ${inside}, ${city}-এর বাইরে ${outside}। পেমেন্ট ক্যাশ অন ডেলিভারি।`,
+    `${city}-er bhitore delivery charge ${inside}, ${city}-er baire ${outside}. Payment cash on delivery.`,
+  );
+}
+
+/**
+ * What the shop has stated about itself, for the model's `shop_info` tool.
+ *
+ * Given on every call, whether or not the FAQ matched: these are settings the
+ * owner filled in, and a model that has them cannot be stuck for an answer
+ * about delivery just because nobody wrote a FAQ entry for it.
+ */
+function shopFacts(settings: AssistantSettings): string {
+  const lines = [
+    `currency: ${settings.currency}`,
+    `delivery_charge_inside_${settings.homeCity.trim() || "home_city"}: ${settings.deliveryInsideCity} ${settings.currency}`,
+    `delivery_charge_elsewhere: ${settings.deliveryOutsideCity} ${settings.currency}`,
+    "payment: cash on delivery",
+  ];
+
+  return ["The shop's stated terms:", ...lines].join("\n");
+}
 
 function money(amount: string, settings: AssistantSettings): string {
   return (

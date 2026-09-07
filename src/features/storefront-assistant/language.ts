@@ -56,14 +56,36 @@ export function toAsciiDigits(value: string): string {
   );
 }
 
+/**
+ * Case, whitespace, digits and Unicode composition, all made comparable.
+ *
+ * NFC matters as much as the rest for Bangla, and for the same reason the
+ * reference agent normalises: "য়" can arrive as one code point or as two, and
+ * two spellings of the same word do not match each other. Anything comparing
+ * Bangla text — product search, FAQ retrieval, intent patterns — goes through
+ * here first, so the comparison is between words rather than between encodings.
+ */
 export function normalize(message: string): string {
-  return toAsciiDigits(message).toLowerCase().trim().split(/\s+/).join(" ");
+  return toAsciiDigits(message)
+    .normalize("NFC")
+    .toLowerCase()
+    .trim()
+    .split(/\s+/)
+    .join(" ");
 }
 
 export function detectLanguage(message: string): Language {
   if (BANGLA_SCRIPT.test(message)) return "bangla";
 
-  const words = new Set(normalize(message).split(" "));
+  // Punctuation is stripped before the lexicon is consulted: "koto?" is the
+  // same word as "koto", and a question mark is exactly what a question ends
+  // with — leaving it attached answered Banglish questions in English.
+  const words = new Set(
+    normalize(message)
+      .split(" ")
+      .map((word) => word.replace(/[^\p{L}\p{N}\p{M}]/gu, ""))
+      .filter((word) => word !== ""),
+  );
 
   for (const marker of BANGLISH_MARKERS) {
     if (words.has(marker)) return "banglish";

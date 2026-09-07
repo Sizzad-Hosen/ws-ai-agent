@@ -6,6 +6,7 @@ import {
   isCancellation,
   isCatalogueQuery,
   isConfirmation,
+  isDeliveryQuestion,
 } from "./parse";
 
 /**
@@ -96,5 +97,28 @@ describe("isCatalogueQuery", () => {
   it("does not swallow a specific product question", () => {
     expect(isCatalogueQuery("iphone 15 er dam koto")).toBe(false);
     expect(isCatalogueQuery("is the blue one in stock")).toBe(false);
+  });
+});
+
+describe("isDeliveryQuestion", () => {
+  it("recognises the question in all three languages", () => {
+    expect(isDeliveryQuestion("Delivery charge?")).toBe(true);
+    expect(isDeliveryQuestion("how much is delivery")).toBe(true);
+    expect(isDeliveryQuestion("delivery charge koto?")).toBe(true);
+    expect(isDeliveryQuestion("delivery khoroch koto")).toBe(true);
+    expect(isDeliveryQuestion("ডেলিভারি চার্জ কত?")).toBe(true);
+    expect(isDeliveryQuestion("কুরিয়ার খরচ কত")).toBe(true);
+  });
+
+  it("leaves questions about timing and reach to the FAQ", () => {
+    // How long and where are questions the shop answers in its own words.
+    // Only the charge is settled by its settings, and answering the wrong one
+    // is worse than searching for an answer.
+    expect(isDeliveryQuestion("when will you deliver")).toBe(false);
+    expect(isDeliveryQuestion("delivery koto din lage?")).toBe(false);
+    expect(isDeliveryQuestion("ডেলিভারি কত দিন লাগে?")).toBe(false);
+    expect(isDeliveryQuestion("how long does delivery take")).toBe(false);
+    expect(isDeliveryQuestion("do you deliver to Sylhet")).toBe(false);
+    expect(isDeliveryQuestion("koto dam")).toBe(false);
   });
 });

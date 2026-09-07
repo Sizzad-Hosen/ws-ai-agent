@@ -100,6 +100,35 @@ export function isCancellation(message: string): boolean {
   return CANCEL_PHRASES.has(normalize(message));
 }
 
+/**
+ * "How much is delivery?" — the most asked question in the shop, and one the
+ * shop already answered in its settings, so it never needs a search.
+ */
+export function isDeliveryQuestion(message: string): boolean {
+  const text = normalize(message);
+
+  const aboutDelivery =
+    /\b(delivery|shipping|deliver|courier)\b/.test(text) ||
+    /(ডেলিভারি|ডেলিভারী|কুরিয়ার)/.test(text);
+
+  if (!aboutDelivery) return false;
+
+  // "delivery koto din lage" asks how long, not how much. Time is a question
+  // the shop answers in its own FAQ; only the charge comes from settings, and
+  // answering the wrong one is worse than searching.
+  const aboutTime =
+    /\b(day|days|time|long|when|din|dine|somoy|kobe|kotodin)\b/.test(text) ||
+    /(দিন|সময়|কবে|কতদিন)/.test(text);
+
+  if (aboutTime) return false;
+
+  return (
+    /\b(charge|charges|cost|fee|price|free|taka|khoroch|koto)\b/.test(text) ||
+    /how much/.test(text) ||
+    /(চার্জ|খরচ|কত|ফ্রি|টাকা|মূল্য)/.test(text)
+  );
+}
+
 /** "What do you sell?" — asked often enough to answer without a search. */
 export function isCatalogueQuery(message: string): boolean {
   const text = normalize(message);

@@ -339,6 +339,30 @@ async function main(): Promise<void> {
       faq.reply.includes("next day"),
       `The shop's FAQ answer was not used: ${faq.reply}`,
     );
+    // The delivery charge is answered from the shop's settings, with no FAQ
+    // entry for it — the question that used to fall through to the product
+    // search and come back with nothing.
+    for (const question of [
+      "Delivery charge?",
+      "delivery charge koto?",
+      "ডেলিভারি চার্জ কত?",
+    ]) {
+      const asked = await say(shopA, newDraft(), question);
+      check(
+        asked.reply.includes("80"),
+        `"${question}" did not quote the inside-city rate: ${asked.reply}`,
+      );
+      check(
+        asked.reply.includes("150"),
+        `"${question}" did not quote the elsewhere rate: ${asked.reply}`,
+      );
+      check(
+        asked.reply.toLowerCase().includes("dhaka") ||
+          asked.reply.includes("ঢাকা"),
+        `"${question}" did not name the home city: ${asked.reply}`,
+      );
+    }
+
     const faqBangla = await say(shopA, newDraft(), "ডেলিভারি কত দিন লাগে?");
     check(
       faqBangla.reply.includes("পরদিনই"),

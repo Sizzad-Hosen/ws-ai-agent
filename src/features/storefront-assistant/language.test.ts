@@ -19,6 +19,13 @@ describe("detectLanguage", () => {
     expect(detectLanguage("vai stock ase?")).toBe("banglish");
   });
 
+  it("is not thrown off by the punctuation a question ends with", () => {
+    // "koto?" is the same word as "koto"; leaving the mark attached answered
+    // Banglish questions in English.
+    expect(detectLanguage("delivery charge koto?")).toBe("banglish");
+    expect(detectLanguage("stock ache!")).toBe("banglish");
+  });
+
   it("reads English as English", () => {
     expect(detectLanguage("How much is the iPhone 15?")).toBe("english");
     expect(detectLanguage("do you deliver on friday")).toBe("english");
