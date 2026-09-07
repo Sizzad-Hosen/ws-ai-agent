@@ -13,6 +13,7 @@ import { requireTenantPage } from "@/server/tenancy/tenant-guard";
 
 import { productInputSchema, variantInputSchema } from "./schemas";
 import {
+  addDefaultVariant,
   createProduct,
   createVariant,
   deleteProduct,
@@ -91,6 +92,47 @@ export async function saveProductAction(
   return {
     success: true,
     message: parsedId ? "Product updated." : "Product created.",
+    id: outcome.id,
+  };
+}
+
+/**
+ * Gives a product the first variant it never got.
+ *
+ * For rows that predate variants being created with the product, and for
+ * anything written straight into the tables. Priced from `basePrice`, which is
+ * what a product created today would use — so a catalogue that was invisible
+ * to customers becomes sellable without retyping it.
+ */
+export async function makeProductSellableAction(
+  slug: unknown,
+  productId: unknown,
+): Promise<ProductActionResult> {
+  const parsedSlug = tenantSlugSchema.safeParse(slug);
+  const parsedId = idSchema.safeParse(productId);
+
+  if (!parsedSlug.success || !parsedId.success) {
+    return { success: false, message: "That request was not understood." };
+  }
+
+  const { tenant } = await requireTenantPage(parsedSlug.data);
+  const outcome = await addDefaultVariant(tenant.db, parsedId.data);
+
+  if (!outcome.ok) {
+    return {
+      success: false,
+      message:
+        outcome.reason === "not-found"
+          ? "That product no longer exists."
+          : "This product already has a variant. Open it to edit the stock.",
+    };
+  }
+
+  revalidateProduct(parsedSlug.data, parsedId.data);
+
+  return {
+    success: true,
+    message: "Variant added. Set its stock so customers can order it.",
     id: outcome.id,
   };
 }

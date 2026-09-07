@@ -13,7 +13,10 @@ import {
   respondToCustomer,
   type ProductCard,
 } from "@/features/storefront-assistant/agent";
-import { listStorefrontVariants } from "@/features/storefront-assistant/catalogue";
+import {
+  listStorefrontVariants,
+  storefrontReadiness,
+} from "@/features/storefront-assistant/catalogue";
 import {
   newDraft,
   type AssistantDraft,
@@ -23,6 +26,10 @@ import {
   saveAssistantSettings,
   saveFaq,
 } from "@/features/storefront-assistant/settings";
+import {
+  addDefaultVariant,
+  createProduct,
+} from "@/features/tenant-dashboard/products/service";
 import { prisma } from "@/server/db/prisma";
 import { provisionDatabaseForTenant } from "@/server/services/provision-tenant-database";
 import { resolveTenant } from "@/server/tenancy/resolve-tenant";
@@ -132,6 +139,107 @@ async function main(): Promise<void> {
       (await listStorefrontVariants(shopA.db)).length === 1,
       "Shop A should offer exactly one variant.",
     );
+
+    // ---- a product added the ordinary way is on sale immediately ----------
+    //
+    // The regression this pins down: a product with no variant has no price a
+    // customer can pay, no stock and nothing an order line can name, so it is
+    // invisible on the storefront. A catalogue full of them looks stocked in
+    // the dashboard and empty in the chat.
+    const added = await createProduct(shopA.db, {
+      name: "Almond Croissant",
+      slug: "almond-croissant",
+      status: "ACTIVE",
+      basePrice: "2.25",
+      compareAtPrice: null,
+      openingSku: null,
+      openingStock: 6,
+    });
+    check(added.ok, "The product was not created.");
+    if (!added.ok) return;
+
+    const offeredNow = await listStorefrontVariants(shopA.db);
+    check(
+      offeredNow.some((entry) => entry.productName === "Almond Croissant"),
+      "A product added the ordinary way was not offered to customers.",
+    );
+    check(
+      offeredNow.find((entry) => entry.productName === "Almond Croissant")
+        ?.available === 6,
+      "The opening stock did not reach the storefront.",
+    );
+
+    // A draft stays hidden, and the readiness count says why.
+    const draft = await createProduct(shopA.db, {
+      name: "Secret Recipe",
+      slug: "secret-recipe",
+      status: "DRAFT",
+      basePrice: "9.00",
+      compareAtPrice: null,
+      openingSku: null,
+      openingStock: 3,
+    });
+    check(draft.ok, "The draft product was not created.");
+    if (!draft.ok) return;
+
+    check(
+      (await listStorefrontVariants(shopA.db)).every(
+        (entry) => entry.productName !== "Secret Recipe",
+      ),
+      "A draft product was offered to customers.",
+    );
+
+    // A product written straight into the table, with no variant, is the shape
+    // that produced the empty shop — and it can be repaired in place.
+    const bare = await shopA.db.product.create({
+      data: {
+        name: "Plain Bagel",
+        slug: "plain-bagel",
+        status: "ACTIVE",
+        basePrice: "1.50",
+      },
+      select: { id: true },
+    });
+
+    let readiness = await storefrontReadiness(shopA.db);
+    check(
+      readiness.productsWithoutVariant === 1,
+      `Readiness counted ${readiness.productsWithoutVariant} products without a variant, not 1.`,
+    );
+    check(
+      readiness.draftProducts === 1,
+      `Readiness counted ${readiness.draftProducts} drafts, not 1.`,
+    );
+    check(
+      (await listStorefrontVariants(shopA.db)).every(
+        (entry) => entry.productName !== "Plain Bagel",
+      ),
+      "A product with no variant was offered to customers.",
+    );
+
+    check(
+      (await addDefaultVariant(shopA.db, bare.id, 4)).ok,
+      "The missing variant could not be added.",
+    );
+    check(
+      (await listStorefrontVariants(shopA.db)).some(
+        (entry) => entry.productName === "Plain Bagel",
+      ),
+      "Repairing a product did not put it on sale.",
+    );
+
+    readiness = await storefrontReadiness(shopA.db);
+    check(
+      readiness.productsWithoutVariant === 0,
+      "Readiness still reports a product without a variant.",
+    );
+
+    // Back to one product, so the assertions below stay about that one.
+    await shopA.db.product.deleteMany({
+      where: {
+        slug: { in: ["almond-croissant", "secret-recipe", "plain-bagel"] },
+      },
+    });
 
     // ---- neither shop can see the other -----------------------------------
     let a = newDraft();

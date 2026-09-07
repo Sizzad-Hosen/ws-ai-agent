@@ -121,9 +121,51 @@ async function main(): Promise<void> {
       status: "ACTIVE",
       basePrice: "3.75",
       compareAtPrice: null,
+      openingSku: "ICED-SMALL",
+      openingStock: 4,
     });
     check(product.ok, "Product was not created.");
     if (!product.ok) return;
+
+    // A product is born sellable. Without its first variant it has no price a
+    // customer can pay, no SKU and no stock, and no order line can name it.
+    const asCreated = await findProduct(db, product.id);
+    check(
+      asCreated?.variants.length === 1,
+      "Creating a product did not create its first variant.",
+    );
+    check(
+      asCreated?.variants[0]?.sku === "ICED-SMALL" &&
+        asCreated?.variants[0]?.price === "3.75" &&
+        asCreated?.variants[0]?.quantity === 4,
+      "The opening variant did not take the price and stock it was given.",
+    );
+    check(
+      (await listVariantOptions(db)).length === 1,
+      "The opening variant was not offered as sellable.",
+    );
+
+    // A product created without a SKU still gets one, derived from the slug.
+    const unnamed = await createProduct(db, {
+      name: "Cold Brew",
+      slug: "cold-brew",
+      status: "ACTIVE",
+      basePrice: "5.00",
+      compareAtPrice: null,
+      openingSku: null,
+      openingStock: 0,
+    });
+    check(unnamed.ok, "Product without an explicit SKU was not created.");
+    if (!unnamed.ok) return;
+    const derived = await findProduct(db, unnamed.id);
+    check(
+      derived?.variants[0]?.sku === "COLD-BREW",
+      `The derived SKU was ${derived?.variants[0]?.sku}, not COLD-BREW.`,
+    );
+    check(
+      (await deleteProduct(db, unnamed.id)).ok,
+      "Cold Brew was not removed.",
+    );
 
     const variant = await createVariant(db, product.id, {
       sku: "ICED-LARGE",
@@ -152,7 +194,7 @@ async function main(): Promise<void> {
     const detail = await findProduct(db, product.id);
     check(detail !== null, "The product could not be read back.");
     check(
-      detail?.variants[0]?.quantity === 10,
+      detail?.variants.find((row) => row.sku === "ICED-LARGE")?.quantity === 10,
       "Inventory was not written with the variant.",
     );
     check(
@@ -177,6 +219,8 @@ async function main(): Promise<void> {
       status: "DRAFT",
       basePrice: "3.00",
       compareAtPrice: null,
+      openingSku: "HOT-1",
+      openingStock: 3,
     });
     check(otherProduct.ok, "Second product was not created.");
     if (!otherProduct.ok) return;
@@ -201,6 +245,8 @@ async function main(): Promise<void> {
       status: "DRAFT",
       basePrice: "3.00",
       compareAtPrice: null,
+      openingSku: null,
+      openingStock: 0,
     });
     check(
       !slugClash.ok && slugClash.reason === "duplicate-slug",
@@ -219,8 +265,18 @@ async function main(): Promise<void> {
 
     const sellable = await listVariantOptions(db);
     check(
-      sellable.length === 1 && sellable[0]?.available === 25,
+      sellable.some(
+        (option) => option.sku === "ICED-LARGE" && option.available === 25,
+      ),
       "Sellable variants did not report the stock on hand.",
+    );
+    check(
+      // A draft product's variant *is* offered here, and deliberately so: this
+      // is the owner's own order form, and taking an order over the phone for
+      // something not yet published is their business. The storefront applies
+      // the stricter rule — see verify:assistant.
+      sellable.some((option) => option.sku === "HOT-1"),
+      "The owner's order form hid a draft product's variant.",
     );
 
     // A category with products cannot be deleted out from under them.

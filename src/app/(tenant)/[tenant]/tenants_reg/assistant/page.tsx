@@ -3,7 +3,9 @@ import Link from "next/link";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
+import { storefrontReadiness } from "@/features/storefront-assistant/catalogue";
 import { AssistantSettingsForm } from "@/features/storefront-assistant/components/assistant-settings-form";
+import { StorefrontReadinessPanel } from "@/features/storefront-assistant/components/storefront-readiness-panel";
 import {
   loadAssistantSettings,
   loadFaq,
@@ -22,9 +24,10 @@ export default async function AssistantPage({
   const { tenant: slug } = await params;
   const { tenant, user } = await requireTenantPage(slug);
 
-  const [settings, faq] = await Promise.all([
+  const [settings, faq, readiness] = await Promise.all([
     loadAssistantSettings(tenant.db),
     loadFaq(tenant.db),
+    storefrontReadiness(tenant.db),
   ]);
 
   return (
@@ -44,6 +47,8 @@ export default async function AssistantPage({
           </Button>
         }
       />
+
+      <StorefrontReadinessPanel slug={tenant.slug} readiness={readiness} />
 
       <AssistantSettingsForm slug={tenant.slug} settings={settings} faq={faq} />
     </TenantShell>

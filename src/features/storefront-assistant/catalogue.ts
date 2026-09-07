@@ -277,3 +277,58 @@ export async function countStorefrontVariants(
 ): Promise<number> {
   return db.productVariant.count({ where: SELLABLE });
 }
+
+export interface StorefrontReadiness {
+  /** Everything in the catalogue, whatever its state. */
+  readonly products: number;
+  readonly activeProducts: number;
+  readonly draftProducts: number;
+  readonly archivedProducts: number;
+  /** Active products with no variant at all — catalogued but unsellable. */
+  readonly productsWithoutVariant: number;
+  /** What a customer can actually be shown. */
+  readonly sellableVariants: number;
+  /** Of those, how many have nothing left on the shelf. */
+  readonly outOfStock: number;
+}
+
+/**
+ * Why the storefront shows what it shows.
+ *
+ * A shop owner who has added products and sees "no products yet" in the chat
+ * has no way, from that screen, to know which of three rules excluded them.
+ * This counts each one so the answer can be shown next to the assistant that
+ * gave it, rather than found by reading the query.
+ */
+export async function storefrontReadiness(
+  db: TenantPrismaClient,
+): Promise<StorefrontReadiness> {
+  const [products, byStatus, withoutVariant, sellable, outOfStock] =
+    await Promise.all([
+      db.product.count(),
+      db.product.groupBy({ by: ["status"], _count: { _all: true } }),
+      db.product.count({
+        where: { status: "ACTIVE", variants: { none: {} } },
+      }),
+      db.productVariant.count({ where: SELLABLE }),
+      db.productVariant.count({
+        where: {
+          ...SELLABLE,
+          OR: [{ inventory: null }, { inventory: { quantity: { lte: 0 } } }],
+        },
+      }),
+    ]);
+
+  const count = (status: "ACTIVE" | "DRAFT" | "ARCHIVED") =>
+    byStatus.find((row) => row.status === status)?._count._all ?? 0;
+
+  return {
+    products,
+    activeProducts: count("ACTIVE"),
+    draftProducts: count("DRAFT"),
+    archivedProducts: count("ARCHIVED"),
+    productsWithoutVariant: withoutVariant,
+    sellableVariants: sellable,
+    outOfStock,
+  };
+}

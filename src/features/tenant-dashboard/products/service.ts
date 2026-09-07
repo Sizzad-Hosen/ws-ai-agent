@@ -188,12 +188,28 @@ export type ProductWriteOutcome =
       readonly reason: "duplicate-slug" | "duplicate-sku" | "not-found";
     };
 
+/**
+ * Creates a product and its first variant.
+ *
+ * The variant is not optional. Nothing in this schema can be sold without one
+ * — the price a customer pays, the SKU and the stock are all columns on
+ * `product_variants`, and an order line cannot reference anything else — so a
+ * product created on its own is a row that looks finished and can never be
+ * ordered. It priced itself at `basePrice` because that is the number the
+ * owner just typed, and it carries whatever opening stock they gave.
+ */
 export async function createProduct(
   db: TenantPrismaClient,
   input: ProductInput,
 ): Promise<ProductWriteOutcome> {
   if (await slugTaken(db, input.slug, null)) {
     return { ok: false, reason: "duplicate-slug" };
+  }
+
+  const sku = input.openingSku ?? defaultSku(input.slug);
+
+  if (await skuTaken(db, sku, null)) {
+    return { ok: false, reason: "duplicate-sku" };
   }
 
   const created = await db.product.create({
@@ -205,11 +221,77 @@ export async function createProduct(
       status: input.status,
       basePrice: input.basePrice,
       compareAtPrice: input.compareAtPrice,
+      variants: {
+        create: {
+          sku,
+          price: input.basePrice,
+          compareAtPrice: input.compareAtPrice,
+          isActive: true,
+          inventory: { create: { quantity: input.openingStock } },
+        },
+      },
     },
     select: { id: true },
   });
 
   return { ok: true, id: created.id };
+}
+
+/**
+ * Adds the missing first variant to a product that has none.
+ *
+ * For products created before the two were made inseparable, and for anything
+ * imported straight into the tables. Priced from `basePrice`, like a product
+ * created today. Refused when the product already has a variant, so it cannot
+ * quietly duplicate one.
+ */
+export async function addDefaultVariant(
+  db: TenantPrismaClient,
+  productId: string,
+  quantity = 0,
+): Promise<ProductWriteOutcome> {
+  const product = await db.product.findUnique({
+    where: { id: productId },
+    select: {
+      slug: true,
+      basePrice: true,
+      compareAtPrice: true,
+      _count: { select: { variants: true } },
+    },
+  });
+
+  if (!product) return { ok: false, reason: "not-found" };
+  if (product._count.variants > 0) {
+    return { ok: false, reason: "duplicate-sku" };
+  }
+
+  const sku = defaultSku(product.slug);
+
+  if (await skuTaken(db, sku, null)) {
+    return { ok: false, reason: "duplicate-sku" };
+  }
+
+  const created = await db.productVariant.create({
+    data: {
+      productId,
+      sku,
+      price: product.basePrice,
+      compareAtPrice: product.compareAtPrice,
+      isActive: true,
+      inventory: { create: { quantity } },
+    },
+    select: { id: true },
+  });
+
+  return { ok: true, id: created.id };
+}
+
+/** A SKU derived from the slug, for the variant an owner did not name. */
+function defaultSku(slug: string): string {
+  return slug
+    .replace(/[^A-Za-z0-9._-]/g, "-")
+    .toUpperCase()
+    .slice(0, 100);
 }
 
 export async function updateProduct(

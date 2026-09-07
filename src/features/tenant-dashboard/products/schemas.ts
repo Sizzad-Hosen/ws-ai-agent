@@ -14,9 +14,40 @@ export const productInputSchema = z.object({
   description: z.string().trim().max(5000).optional(),
   /** Null is uncategorised: the column is nullable and the tree is optional. */
   categoryId: z.uuid().nullable().optional(),
-  status: z.enum(PRODUCT_STATUSES).default("DRAFT"),
+  /**
+   * Active by default. A shop owner who adds a product means to sell it, and a
+   * product that lands in Draft is invisible on the storefront for a reason
+   * nobody can see from the screen they added it on.
+   */
+  status: z.enum(PRODUCT_STATUSES).default("ACTIVE"),
   basePrice: moneySchema,
   compareAtPrice: optionalMoneySchema,
+  /**
+   * The first variant, created with the product.
+   *
+   * Nothing can be sold without one: the sellable price, the SKU and the stock
+   * all live on `product_variants`, and `order_items.product_variant_id` is not
+   * nullable — so a product with no variant can be catalogued and never
+   * ordered. Asking for a SKU and an opening stock here is what stops an owner
+   * filling a catalogue that their storefront cannot show. Ignored on update,
+   * where variants are managed on the product's own page.
+   */
+  openingSku: z
+    .string()
+    .trim()
+    .max(100)
+    .regex(
+      /^[A-Za-z0-9._-]*$/,
+      "Use letters, numbers, dots, dashes or underscores.",
+    )
+    .optional()
+    .transform((value) => (value === undefined || value === "" ? null : value)),
+  openingStock: z
+    .union([z.literal(""), z.coerce.number().int().min(0).max(1_000_000)])
+    .nullish()
+    .transform((value) =>
+      value === "" || value === null || value === undefined ? 0 : Number(value),
+    ),
 });
 
 export type ProductInput = z.infer<typeof productInputSchema>;

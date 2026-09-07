@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/table";
 import {
   deleteProductAction,
+  makeProductSellableAction,
   saveProductAction,
 } from "@/features/tenant-dashboard/products/actions";
 import type { ProductRow } from "@/features/tenant-dashboard/products/service";
@@ -78,7 +79,19 @@ export function ProductsManager({
   const [editing, setEditing] = useState<Editing>(null);
   const [deleting, setDeleting] = useState<ProductRow | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  function makeSellable(row: ProductRow): void {
+    setRowError(null);
+
+    startTransition(async () => {
+      const outcome = await makeProductSellableAction(slug, row.id);
+
+      if (outcome.success) router.refresh();
+      else setRowError(outcome.message);
+    });
+  }
 
   const base = tenantHref(slug, "products");
 
@@ -162,6 +175,12 @@ export function ProductsManager({
           </Button>
         </div>
 
+        {rowError ? (
+          <p className="text-destructive px-4 pt-3 text-sm" role="alert">
+            {rowError}
+          </p>
+        ) : null}
+
         <TableScroller>
           <Table>
             <THead>
@@ -207,7 +226,28 @@ export function ProductsManager({
                     <TD numeric>
                       {formatMoney(row.basePrice, currency) ?? row.basePrice}
                     </TD>
-                    <TD numeric>{row.variantCount}</TD>
+                    <TD numeric>
+                      {row.variantCount === 0 ? (
+                        <span className="flex items-center justify-end gap-2">
+                          <Badge
+                            tone="danger"
+                            title="No variant, so customers cannot order it"
+                          >
+                            None
+                          </Badge>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={isPending}
+                            onClick={() => makeSellable(row)}
+                          >
+                            Make sellable
+                          </Button>
+                        </span>
+                      ) : (
+                        row.variantCount
+                      )}
+                    </TD>
                     <TD>
                       <Badge tone={PRODUCT_STATUS_TONES[row.status]}>
                         {PRODUCT_STATUS_LABELS[row.status]}
@@ -340,9 +380,14 @@ function ProductFormDialog({
         slug: effectiveSlug,
         description: String(form.get("description") ?? ""),
         categoryId: categoryId === "" ? null : categoryId,
-        status: String(form.get("status") ?? "DRAFT"),
+        status: String(form.get("status") ?? "ACTIVE"),
         basePrice: String(form.get("basePrice") ?? ""),
         compareAtPrice: String(form.get("compareAtPrice") ?? ""),
+        // Only meaningful on create: the first variant is made with the
+        // product, because nothing can be sold without one. Variants are
+        // managed on the product's own page after that.
+        openingSku: row ? "" : String(form.get("openingSku") ?? ""),
+        openingStock: row ? "" : String(form.get("openingStock") ?? "0"),
       });
 
       if (outcome.success) {
@@ -414,7 +459,7 @@ function ProductFormDialog({
               <Select
                 id="status"
                 name="status"
-                defaultValue={row?.status ?? "DRAFT"}
+                defaultValue={row?.status ?? "ACTIVE"}
                 options={PRODUCT_STATUSES.map((value) => ({
                   value,
                   label: PRODUCT_STATUS_LABELS[value],
@@ -453,6 +498,41 @@ function ProductFormDialog({
               />
             </FormField>
           </div>
+
+          {row ? null : (
+            <div className="border-border grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
+              <p className="text-muted-foreground text-xs sm:col-span-2">
+                A product is sold through a variant, which holds its SKU and
+                stock. The first one is created with the product, priced at the
+                price above; add more from the product&apos;s own page.
+              </p>
+
+              <FormField
+                htmlFor="openingStock"
+                label="Opening stock"
+                error={fieldErrors.openingStock?.[0]}
+              >
+                <Input
+                  id="openingStock"
+                  name="openingStock"
+                  inputMode="numeric"
+                  defaultValue="0"
+                />
+              </FormField>
+
+              <FormField
+                htmlFor="openingSku"
+                label="SKU (optional)"
+                error={fieldErrors.openingSku?.[0]}
+              >
+                <Input
+                  id="openingSku"
+                  name="openingSku"
+                  placeholder="Left blank, we derive it from the slug"
+                />
+              </FormField>
+            </div>
+          )}
 
           <FormField htmlFor="description" label="Description">
             <Textarea
