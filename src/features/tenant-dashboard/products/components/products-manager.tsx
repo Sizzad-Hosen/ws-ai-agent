@@ -387,7 +387,7 @@ function ProductFormDialog({
         // product, because nothing can be sold without one. Variants are
         // managed on the product's own page after that.
         openingSku: row ? "" : String(form.get("openingSku") ?? ""),
-        openingStock: row ? "" : String(form.get("openingStock") ?? "0"),
+        openingStock: row ? "" : String(form.get("openingStock") ?? ""),
       });
 
       if (outcome.success) {
@@ -509,14 +509,14 @@ function ProductFormDialog({
 
               <FormField
                 htmlFor="openingStock"
-                label="Opening stock"
+                label="Opening stock (optional)"
                 error={fieldErrors.openingStock?.[0]}
               >
                 <Input
                   id="openingStock"
                   name="openingStock"
                   inputMode="numeric"
-                  defaultValue="0"
+                  placeholder="Blank if you do not track stock"
                 />
               </FormField>
 

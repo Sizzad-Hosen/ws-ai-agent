@@ -218,14 +218,38 @@ async function main(): Promise<void> {
     );
 
     check(
-      (await addDefaultVariant(shopA.db, bare.id, 4)).ok,
+      (await addDefaultVariant(shopA.db, bare.id)).ok,
       "The missing variant could not be added.",
     );
+    const repaired = (await listStorefrontVariants(shopA.db)).find(
+      (entry) => entry.productName === "Plain Bagel",
+    );
     check(
-      (await listStorefrontVariants(shopA.db)).some(
-        (entry) => entry.productName === "Plain Bagel",
-      ),
+      repaired !== undefined,
       "Repairing a product did not put it on sale.",
+    );
+    if (!repaired) return;
+    // Repaired with no stock count: a shop that never counted its shelves is a
+    // shop that sells, not a shop that is sold out.
+    check(
+      repaired.available === null,
+      `The repaired variant claimed a stock of ${repaired.available}.`,
+    );
+
+    const untrackedOrder = await say(
+      shopA,
+      newDraft(),
+      "order this",
+      repaired.variantId,
+    );
+    check(
+      untrackedOrder.draft.state === "awaiting_quantity",
+      `An untracked item could not be ordered: ${untrackedOrder.reply}`,
+    );
+    const anyQuantity = await say(shopA, untrackedOrder.draft, "50");
+    check(
+      anyQuantity.draft.quantity === 50,
+      `An untracked item capped the quantity: ${anyQuantity.reply}`,
     );
 
     readiness = await storefrontReadiness(shopA.db);

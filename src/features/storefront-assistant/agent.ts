@@ -74,8 +74,9 @@ export interface ProductCard {
   readonly sku: string;
   /** Already formatted in the shop's currency. */
   readonly price: string;
+  /** Empty when the shop does not track stock for this item. */
   readonly stockLabel: string;
-  readonly available: number;
+  readonly available: number | null;
   readonly actionLabel: string;
 }
 
@@ -638,7 +639,9 @@ function describeVariants(
         `product: ${variant.productName}`,
         `sku: ${variant.sku}`,
         `price: ${variant.price} ${settings.currency}`,
-        `in_stock: ${variant.available}`,
+        variant.available === null
+          ? "stock: not tracked by this shop — do not quote a quantity"
+          : `in_stock: ${variant.available}`,
         variant.categoryName ? `category: ${variant.categoryName}` : null,
         variant.description
           ? `description: ${variant.description.slice(0, 300)}`
@@ -661,7 +664,7 @@ async function startCheckout(
 ): Promise<AssistantReply> {
   const { settings } = context;
 
-  if (variant.available <= 0) {
+  if (variant.available !== null && variant.available <= 0) {
     return reply(
       draft,
       choose(
@@ -680,7 +683,9 @@ async function startCheckout(
     pendingQuery: null,
   };
 
-  if (quantity && quantity <= variant.available) {
+  const limit = variant.available;
+
+  if (quantity && (limit === null || quantity <= limit)) {
     return reply(
       { ...next, quantity, state: "awaiting_name" },
       choose(
@@ -693,27 +698,36 @@ async function startCheckout(
     );
   }
 
-  if (quantity && quantity > variant.available) {
+  if (quantity && limit !== null && quantity > limit) {
     return reply(
       { ...next, state: "awaiting_quantity", quantity: null },
       choose(
         language,
-        `Only ${variant.available} left. How many would you like?`,
-        `মাত্র ${variant.available}টি আছে। আপনি কতটি নিতে চান?`,
-        `Matro ${variant.available} ta ache. Koyti niben?`,
+        `Only ${limit} left. How many would you like?`,
+        `মাত্র ${limit}টি আছে। আপনি কতটি নিতে চান?`,
+        `Matro ${limit} ta ache. Koyti niben?`,
       ),
       "checkout",
     );
   }
 
+  const shown = price(variant, settings);
+
   return reply(
     { ...next, state: "awaiting_quantity" },
-    choose(
-      language,
-      `${variant.productName} — ${price(variant, settings)}, ${variant.available} in stock. How many would you like?`,
-      `${variant.productName} — ${price(variant, settings)}, স্টকে ${variant.available}টি। আপনি কতটি নিতে চান?`,
-      `${variant.productName} — ${price(variant, settings)}, stock-e ${variant.available} ta. Koyti niben?`,
-    ),
+    limit === null
+      ? choose(
+          language,
+          `${variant.productName} — ${shown}. How many would you like?`,
+          `${variant.productName} — ${shown}। আপনি কতটি নিতে চান?`,
+          `${variant.productName} — ${shown}. Koyti niben?`,
+        )
+      : choose(
+          language,
+          `${variant.productName} — ${shown}, ${limit} in stock. How many would you like?`,
+          `${variant.productName} — ${shown}, স্টকে ${limit}টি। আপনি কতটি নিতে চান?`,
+          `${variant.productName} — ${shown}, stock-e ${limit} ta. Koyti niben?`,
+        ),
     "checkout",
     { quickReplies: ["1", "2", "3"] },
   );
@@ -784,7 +798,7 @@ async function advanceCheckout(
         );
       }
 
-      if (quantity > variant.available) {
+      if (variant.available !== null && quantity > variant.available) {
         return reply(
           draft,
           choose(
@@ -1035,15 +1049,19 @@ function toCards(
     productName: variant.productName,
     sku: variant.sku,
     price: price(variant, settings),
+    // A shop that does not count its stock should not have a count invented
+    // for it, in either direction.
     stockLabel:
-      variant.available > 0
-        ? choose(
-            language,
-            `${variant.available} in stock`,
-            `স্টকে ${variant.available}টি`,
-            `stock-e ${variant.available} ta`,
-          )
-        : choose(language, "Out of stock", "স্টকে নেই", "Stock-e nei"),
+      variant.available === null
+        ? ""
+        : variant.available > 0
+          ? choose(
+              language,
+              `${variant.available} in stock`,
+              `স্টকে ${variant.available}টি`,
+              `stock-e ${variant.available} ta`,
+            )
+          : choose(language, "Out of stock", "স্টকে নেই", "Stock-e nei"),
     available: variant.available,
     actionLabel: choose(language, "Order this", "অর্ডার করব", "Order korbo"),
   }));

@@ -251,11 +251,13 @@ export function StorefrontChat({
                           {card.productName}
                         </p>
                         <p className="text-xs text-white/85">
-                          {card.price} · {card.stockLabel}
+                          {card.stockLabel === ""
+                            ? card.price
+                            : `${card.price} · ${card.stockLabel}`}
                         </p>
                         <button
                           type="button"
-                          disabled={isPending || card.available <= 0}
+                          disabled={isPending || card.available === 0}
                           onClick={() =>
                             send(
                               `${card.actionLabel}: ${card.productName}`,

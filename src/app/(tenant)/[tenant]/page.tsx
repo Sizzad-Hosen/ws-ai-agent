@@ -141,11 +141,15 @@ export default async function TenantSitePage({
                     {formatMoney(variant.price, shop.settings.currency) ??
                       variant.price}
                   </p>
-                  <p className="text-ps-ink-subtle mt-1 text-xs">
-                    {variant.available > 0
-                      ? `${variant.available} available`
-                      : "Out of stock"}
-                  </p>
+                  {/* A shop that does not track stock gets no claim made
+                      about it, in either direction. */}
+                  {variant.available === null ? null : (
+                    <p className="text-ps-ink-subtle mt-1 text-xs">
+                      {variant.available > 0
+                        ? `${variant.available} available`
+                        : "Out of stock"}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>

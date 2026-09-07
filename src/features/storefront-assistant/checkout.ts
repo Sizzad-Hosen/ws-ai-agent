@@ -90,7 +90,9 @@ export async function summarizeDraft(
       customerName: draft.customerName,
       customerPhone: draft.customerPhone,
       customerAddress: draft.customerAddress,
-      inStock: variant.available >= draft.quantity,
+      // Untracked stock makes no claim, so it cannot contradict the order.
+      inStock:
+        variant.available === null || variant.available >= draft.quantity,
     },
   };
 }

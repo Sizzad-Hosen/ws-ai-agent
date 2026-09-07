@@ -34,7 +34,8 @@ export interface VariantRow {
   readonly price: string;
   readonly compareAtPrice: string | null;
   readonly isActive: boolean;
-  readonly quantity: number;
+  /** Null when this shop does not track stock for the variant. */
+  readonly quantity: number | null;
   readonly reservedQuantity: number;
   readonly reorderLevel: number | null;
   /** Ordered lines pointing at this variant; one is enough to block a delete. */
@@ -123,7 +124,7 @@ export async function findProduct(
         ? toAmount(variant.compareAtPrice)
         : null,
       isActive: variant.isActive,
-      quantity: variant.inventory?.quantity ?? 0,
+      quantity: variant.inventory?.quantity ?? null,
       reservedQuantity: variant.inventory?.reservedQuantity ?? 0,
       reorderLevel: variant.inventory?.reorderLevel ?? null,
       orderedCount: variant._count.orderItems,
@@ -227,7 +228,7 @@ export async function createProduct(
           price: input.basePrice,
           compareAtPrice: input.compareAtPrice,
           isActive: true,
-          inventory: { create: { quantity: input.openingStock } },
+          ...inventoryFor(input.openingStock),
         },
       },
     },
@@ -248,7 +249,7 @@ export async function createProduct(
 export async function addDefaultVariant(
   db: TenantPrismaClient,
   productId: string,
-  quantity = 0,
+  quantity: number | null = null,
 ): Promise<ProductWriteOutcome> {
   const product = await db.product.findUnique({
     where: { id: productId },
@@ -278,12 +279,23 @@ export async function addDefaultVariant(
       price: product.basePrice,
       compareAtPrice: product.compareAtPrice,
       isActive: true,
-      inventory: { create: { quantity } },
+      ...inventoryFor(quantity),
     },
     select: { id: true },
   });
 
   return { ok: true, id: created.id };
+}
+
+/**
+ * The nested inventory write for a quantity, or nothing at all.
+ *
+ * A variant with no inventory row is untracked, not empty. Writing a zero for
+ * an owner who left the field blank would put "out of stock" on every product
+ * they own.
+ */
+function inventoryFor(quantity: number | null) {
+  return quantity === null ? {} : { inventory: { create: { quantity } } };
 }
 
 /** A SKU derived from the slug, for the variant an owner did not name. */
@@ -402,12 +414,16 @@ export async function createVariant(
       price: input.price,
       compareAtPrice: input.compareAtPrice,
       isActive: input.isActive,
-      inventory: {
-        create: {
-          quantity: input.quantity,
-          reorderLevel: input.reorderLevel,
-        },
-      },
+      ...(input.quantity === null
+        ? {}
+        : {
+            inventory: {
+              create: {
+                quantity: input.quantity,
+                reorderLevel: input.reorderLevel,
+              },
+            },
+          }),
     },
     select: { id: true },
   });
@@ -441,22 +457,26 @@ export async function updateVariant(
       price: input.price,
       compareAtPrice: input.compareAtPrice,
       isActive: input.isActive,
-      // Upsert rather than update: a variant provisioned before this screen
-      // existed may have no inventory row yet.
-      inventory: {
-        upsert: {
-          create: {
-            quantity: input.quantity,
-            reorderLevel: input.reorderLevel,
-          },
-          update: {
-            quantity: input.quantity,
-            reorderLevel: input.reorderLevel,
-          },
-        },
-      },
     },
   });
+
+  // Stock is written separately, because clearing it means removing the row
+  // rather than storing a number — that is how an owner stops tracking stock
+  // for something instead of declaring it sold out. A one-to-one `delete` in
+  // a nested write throws when there is nothing to delete; this does not.
+  if (input.quantity === null) {
+    await db.inventory.deleteMany({ where: { productVariantId: variantId } });
+  } else {
+    await db.inventory.upsert({
+      where: { productVariantId: variantId },
+      create: {
+        productVariantId: variantId,
+        quantity: input.quantity,
+        reorderLevel: input.reorderLevel,
+      },
+      update: { quantity: input.quantity, reorderLevel: input.reorderLevel },
+    });
+  }
 
   return { ok: true, id: variantId };
 }

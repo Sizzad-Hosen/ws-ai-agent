@@ -116,7 +116,15 @@ export function ProductVariantsManager({
                     <TD numeric>
                       {formatMoney(row.price, currency) ?? row.price}
                     </TD>
-                    <TD numeric>{row.quantity}</TD>
+                    <TD numeric>
+                      {row.quantity === null ? (
+                        <span className="text-muted-foreground">
+                          Not tracked
+                        </span>
+                      ) : (
+                        row.quantity
+                      )}
+                    </TD>
                     <TD numeric>{row.reservedQuantity}</TD>
                     <TD numeric>{row.reorderLevel ?? "—"}</TD>
                     <TD>
@@ -226,7 +234,7 @@ function VariantFormDialog({
           price: String(form.get("price") ?? ""),
           compareAtPrice: String(form.get("compareAtPrice") ?? ""),
           isActive,
-          quantity: String(form.get("quantity") ?? "0"),
+          quantity: String(form.get("quantity") ?? ""),
           reorderLevel: String(form.get("reorderLevel") ?? ""),
         },
       );
@@ -300,9 +308,13 @@ function VariantFormDialog({
               <Input
                 id="quantity"
                 name="quantity"
-                required
                 inputMode="numeric"
-                defaultValue={String(row?.quantity ?? 0)}
+                placeholder="Blank = not tracked"
+                defaultValue={
+                  row?.quantity === null || row?.quantity === undefined
+                    ? ""
+                    : String(row.quantity)
+                }
               />
             </FormField>
 

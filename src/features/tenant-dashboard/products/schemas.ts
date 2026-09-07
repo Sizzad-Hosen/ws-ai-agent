@@ -71,11 +71,15 @@ export const variantInputSchema = z.object({
   price: moneySchema,
   compareAtPrice: optionalMoneySchema,
   isActive: z.boolean().default(true),
-  quantity: z.coerce
-    .number()
-    .int("Enter a whole number.")
-    .min(0)
-    .max(1_000_000),
+  /** Blank leaves this variant's stock untracked; see `openingStock`. */
+  quantity: z
+    .union([z.literal(""), z.coerce.number().int().min(0).max(1_000_000)])
+    .nullish()
+    .transform((value) =>
+      value === "" || value === null || value === undefined
+        ? null
+        : Number(value),
+    ),
   reorderLevel: z
     .union([z.literal(""), z.coerce.number().int().min(0).max(1_000_000)])
     .nullish()

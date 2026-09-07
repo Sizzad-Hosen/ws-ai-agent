@@ -126,5 +126,14 @@ function blockers(readiness: StorefrontReadiness): readonly Blocker[] {
     });
   }
 
+  if (readiness.untracked > 0) {
+    list.push({
+      title: `${formatNumber(readiness.untracked)} ${
+        readiness.untracked === 1 ? "item sells" : "items sell"
+      } without a stock count.`,
+      fix: "That is fine — no quantity is quoted and orders are not capped. Set a quantity on the variant if you want the shop to keep count.",
+    });
+  }
+
   return list;
 }

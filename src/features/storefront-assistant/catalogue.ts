@@ -24,7 +24,15 @@ export interface StorefrontVariant {
   readonly productName: string;
   readonly sku: string;
   readonly price: string;
-  readonly available: number;
+  /**
+   * How many are left, or null when this shop does not track stock for it.
+   *
+   * `inventory` is an optional table in the tenant schema — a variant may have
+   * no row at all — and a shop that has never counted its shelves is a normal
+   * shop, not a shop with nothing on them. Null therefore means "no claim
+   * about stock": the item sells, and no quantity is quoted or enforced.
+   */
+  readonly available: number | null;
   readonly categoryName: string | null;
   readonly description: string | null;
 }
@@ -171,12 +179,13 @@ function toVariant(row: VariantRecord): StorefrontVariant {
     productName: row.product.name,
     sku: row.sku,
     price: toAmount(row.price),
-    // Reserved stock is spoken for. Telling a shopper it is available is how
-    // two people are sold the same last item.
-    available: Math.max(
-      0,
-      (row.inventory?.quantity ?? 0) - (row.inventory?.reservedQuantity ?? 0),
-    ),
+    // No inventory row means stock is not tracked, which is different from
+    // none left. Where it is tracked, reserved stock is spoken for: telling a
+    // shopper it is available is how two people are sold the same last item.
+    available:
+      row.inventory === null
+        ? null
+        : Math.max(0, row.inventory.quantity - row.inventory.reservedQuantity),
     categoryName: row.product.category?.name ?? null,
     description: row.product.description,
   };
@@ -288,8 +297,10 @@ export interface StorefrontReadiness {
   readonly productsWithoutVariant: number;
   /** What a customer can actually be shown. */
   readonly sellableVariants: number;
-  /** Of those, how many have nothing left on the shelf. */
+  /** Of those, how many are tracked and have nothing left on the shelf. */
   readonly outOfStock: number;
+  /** And how many sell without a stock count behind them. */
+  readonly untracked: number;
 }
 
 /**
@@ -303,7 +314,7 @@ export interface StorefrontReadiness {
 export async function storefrontReadiness(
   db: TenantPrismaClient,
 ): Promise<StorefrontReadiness> {
-  const [products, byStatus, withoutVariant, sellable, outOfStock] =
+  const [products, byStatus, withoutVariant, sellable, outOfStock, untracked] =
     await Promise.all([
       db.product.count(),
       db.product.groupBy({ by: ["status"], _count: { _all: true } }),
@@ -312,11 +323,9 @@ export async function storefrontReadiness(
       }),
       db.productVariant.count({ where: SELLABLE }),
       db.productVariant.count({
-        where: {
-          ...SELLABLE,
-          OR: [{ inventory: null }, { inventory: { quantity: { lte: 0 } } }],
-        },
+        where: { ...SELLABLE, inventory: { quantity: { lte: 0 } } },
       }),
+      db.productVariant.count({ where: { ...SELLABLE, inventory: null } }),
     ]);
 
   const count = (status: "ACTIVE" | "DRAFT" | "ARCHIVED") =>
@@ -330,5 +339,6 @@ export async function storefrontReadiness(
     productsWithoutVariant: withoutVariant,
     sellableVariants: sellable,
     outOfStock,
+    untracked,
   };
 }
