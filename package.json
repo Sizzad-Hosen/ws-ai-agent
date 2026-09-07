@@ -26,7 +26,8 @@
     "verify:tenancy": "node --conditions=react-server --import tsx scripts/verify-tenancy.ts",
     "verify:provisioning": "node --conditions=react-server --import tsx scripts/verify-provisioning.ts",
     "verify:lifecycle": "node --conditions=react-server --import tsx scripts/verify-tenant-lifecycle.ts",
-    "verify:isolation": "node --conditions=react-server --import tsx scripts/verify-tenant-isolation.ts"
+    "verify:isolation": "node --conditions=react-server --import tsx scripts/verify-tenant-isolation.ts",
+    "verify:crud": "node --conditions=react-server --import tsx scripts/verify-tenant-crud.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

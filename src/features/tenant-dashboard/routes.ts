@@ -17,6 +17,15 @@ export function tenantHref(slug: string, segment: string): string {
   return `${tenantBasePath(slug)}/${segment}`;
 }
 
+/** A single record inside a section, e.g. `/acme/tenants_reg/orders/{id}`. */
+export function tenantRecordHref(
+  slug: string,
+  segment: string,
+  id: string,
+): string {
+  return `${tenantHref(slug, segment)}/${id}`;
+}
+
 export function tenantDashboardPath(slug: string): string {
   return tenantHref(slug, "dashboard");
 }
