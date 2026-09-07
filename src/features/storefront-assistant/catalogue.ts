@@ -1,6 +1,7 @@
 import "server-only";
 
 import { toAmount } from "@/features/tenant-dashboard/money";
+import { searchCatalogueSemantically } from "@/server/catalog-sync/retrieval";
 import type { TenantPrismaClient } from "@/server/tenancy/tenant-prisma";
 
 import { normalize } from "./language";
@@ -208,16 +209,37 @@ export async function listStorefrontVariants(
 /**
  * Finds what the customer asked for.
  *
- * Every meaningful token has to appear somewhere in the product, so "iphone
- * 15" does not return every phone in the shop. When nothing matches on all
- * tokens the search widens to any of them, because a shopper who typed one
- * word wrong should still be shown something rather than nothing.
+ * Semantic search first, where this tenant has an embedding index and an
+ * embedding provider is configured. That is what lets "চিকেন আছে?" find a
+ * product called "Fresh Chicken Breast": token matching cannot cross scripts,
+ * and a multilingual embedding does not need to.
+ *
+ * Lexical matching is the fallback, not a legacy path. It answers when there
+ * is no index, when the provider is down, and when the query is an exact SKU —
+ * which is a string match, not a meaning. Every meaningful token has to appear
+ * somewhere in the product, so "iphone 15" does not return every phone in the
+ * shop; when nothing matches on all tokens the search widens to any of them,
+ * because a shopper who typed one word wrong should still be shown something.
  */
 export async function searchStorefrontVariants(
   db: TenantPrismaClient,
   query: string,
   limit = MAX_RESULTS,
 ): Promise<readonly StorefrontVariant[]> {
+  const semantic = await searchCatalogueSemantically(db, query, { limit });
+
+  if (semantic.length > 0) {
+    return semantic.map((match) => ({
+      variantId: match.variantId,
+      productName: match.productName,
+      sku: match.sku,
+      price: match.price,
+      available: match.available,
+      categoryName: match.categoryName,
+      description: match.description,
+    }));
+  }
+
   const tokens = normalize(query)
     .replace(/\b\d{1,3}\s*(?:ta|ti|টি|টা|pcs?|pieces?)\b/g, " ")
     .split(" ")

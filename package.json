@@ -29,7 +29,10 @@
     "verify:lifecycle": "node --conditions=react-server --import tsx scripts/verify-tenant-lifecycle.ts",
     "verify:isolation": "node --conditions=react-server --import tsx scripts/verify-tenant-isolation.ts",
     "verify:crud": "node --conditions=react-server --import tsx scripts/verify-tenant-crud.ts",
-    "verify:assistant": "node --conditions=react-server --import tsx scripts/verify-storefront-assistant.ts"
+    "verify:assistant": "node --conditions=react-server --import tsx scripts/verify-storefront-assistant.ts",
+    "sync:backfill": "node --conditions=react-server --import tsx scripts/catalog-backfill.ts",
+    "sync:reconcile": "node --conditions=react-server --import tsx scripts/catalog-reconcile.ts",
+    "verify:sync": "node --conditions=react-server --import tsx scripts/verify-catalog-sync.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
