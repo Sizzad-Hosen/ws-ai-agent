@@ -17,6 +17,7 @@ export const PUBLIC_NAV: readonly PublicNavItem[] = [
   { label: "Solutions", href: ROUTES.public.solutions },
   { label: "Resources", href: ROUTES.public.demo },
   { label: "Pricing", href: ROUTES.public.pricing },
+  { label: "FAQ", href: ROUTES.public.faq },
   { label: "Company", href: ROUTES.public.company },
 ];
 
@@ -32,6 +33,7 @@ export const PUBLIC_FOOTER: readonly FooterColumn[] = [
       { label: "How it works", href: ROUTES.public.product },
       { label: "Live demo", href: ROUTES.public.demo },
       { label: "Pricing", href: ROUTES.public.pricing },
+      { label: "FAQ", href: ROUTES.public.faq },
     ],
   },
   {

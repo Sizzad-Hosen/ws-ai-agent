@@ -91,6 +91,24 @@ async function main(): Promise<void> {
     throw new Error("Brand name is empty; the header would render unnamed.");
   }
 
+  // ---- the FAQ page has published answers -------------------------------
+  const faqs = await repositories.faqs.findPublished();
+
+  if (faqs.length === 0) {
+    throw new Error("No active FAQs; the FAQ page would be empty.");
+  }
+
+  for (const faq of faqs) {
+    if (faq.question.trim() === "" || faq.answer.trim() === "") {
+      throw new Error(`FAQ ${faq.id} has an empty question or answer.`);
+    }
+  }
+
+  const inactive = await prisma.publicFaq.count({ where: { isActive: false } });
+  if (faqs.length + inactive !== (await prisma.publicFaq.count())) {
+    throw new Error("The FAQ page is not filtering on is_active.");
+  }
+
   // Checks cascade with the registration, so the queue is left exactly as found.
   await prisma.tenantRegistration.delete({
     where: { id: created.registration.id },
@@ -101,7 +119,7 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    `Public site verified: ${plans.length} plans (${custom.length} custom, annual saving ${saving}%), registration ${code} reached the review queue with 3 checks, brand "${settings.brand.name}". Queue restored.`,
+    `Public site verified: ${plans.length} plans (${custom.length} custom, annual saving ${saving}%), registration ${code} reached the review queue with 3 checks, ${faqs.length} published FAQs, brand "${settings.brand.name}". Queue restored.`,
   );
 }
 
