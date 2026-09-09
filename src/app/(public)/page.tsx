@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { ROUTES } from "@/constants/routes";
+import { FaqList } from "@/features/public-site/components/faq-list";
 import {
   PsButton,
   PsCard,
@@ -21,6 +22,7 @@ import {
   LANDING_CONVERSATION,
   WhatsappMockup,
 } from "@/features/public-site/components/whatsapp-mockup";
+import { repositories } from "@/server/repositories";
 
 export const metadata: Metadata = {
   title: "Turn WhatsApp conversations into sales",
@@ -51,7 +53,12 @@ const BENEFITS = [
   },
 ] as const;
 
-export default function PublicHomePage() {
+/** A taste of the FAQ; the rest lives on /faq rather than lengthening the page. */
+const HOME_FAQ_COUNT = 4;
+
+export default async function PublicHomePage() {
+  const faqs = await repositories.faqs.findPublished(HOME_FAQ_COUNT);
+
   return (
     <>
       <section className="section-ps">
@@ -119,6 +126,28 @@ export default function PublicHomePage() {
           ))}
         </div>
       </PsSection>
+
+      {faqs.length > 0 ? (
+        <PsSection>
+          <PsSectionHeading
+            title="Common Questions"
+            description="The things teams ask before connecting their first WhatsApp number."
+          />
+
+          <div className="mt-12">
+            <FaqList faqs={faqs} />
+          </div>
+
+          <div className="mt-10 text-center">
+            <PsButton asChild variant="secondary">
+              <Link href={ROUTES.public.faq}>
+                See all questions
+                <ArrowRight className="size-4" aria-hidden="true" />
+              </Link>
+            </PsButton>
+          </div>
+        </PsSection>
+      ) : null}
     </>
   );
 }

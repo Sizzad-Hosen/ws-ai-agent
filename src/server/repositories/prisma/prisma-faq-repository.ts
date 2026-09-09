@@ -5,9 +5,10 @@ import { prisma } from "@/server/db/prisma";
 import type { FaqRepository } from "@/server/repositories/contracts/faq-repository";
 
 export class PrismaFaqRepository implements FaqRepository {
-  async findPublished(): Promise<readonly PublicFaq[]> {
+  async findPublished(limit?: number): Promise<readonly PublicFaq[]> {
     return prisma.publicFaq.findMany({
       where: { isActive: true },
+      take: limit,
       // `sort_order` is not unique, so ties fall back to insertion order
       // rather than to whatever the planner happens to return.
       orderBy: [
