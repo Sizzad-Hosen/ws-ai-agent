@@ -254,6 +254,11 @@ CREATE TABLE plans (
     max_whatsapp_numbers int NOT NULL DEFAULT 0,
     max_ai_messages      int NOT NULL DEFAULT 0,
     max_products         int NOT NULL DEFAULT 0,
+    -- INFERRED. Marketing content for the pricing cards: toggles, highlights,
+    -- accent colour and the "popular" badge. The pricing page renders it, and
+    -- the plans box has hidden rows below max_products, so the column belongs
+    -- to the design rather than to the application.
+    features             jsonb NOT NULL DEFAULT '{"version":1,"toggles":[],"highlights":[]}'::jsonb,
     is_active            boolean NOT NULL DEFAULT true,          -- INFERRED
     sort_order           int NOT NULL DEFAULT 0,                 -- INFERRED
     created_at           timestamptz(6) NOT NULL DEFAULT now(),  -- INFERRED

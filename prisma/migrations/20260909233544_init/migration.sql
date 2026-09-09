@@ -263,6 +263,7 @@ CREATE TABLE "plans" (
     "max_whatsapp_numbers" INTEGER NOT NULL DEFAULT 0,
     "max_ai_messages" INTEGER NOT NULL DEFAULT 0,
     "max_products" INTEGER NOT NULL DEFAULT 0,
+    "features" JSONB NOT NULL DEFAULT '{"version":1,"toggles":[],"highlights":[]}'::jsonb,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "sort_order" INTEGER NOT NULL DEFAULT 0,
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
