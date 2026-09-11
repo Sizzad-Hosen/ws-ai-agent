@@ -73,7 +73,7 @@ export async function POST(
 
   return apiData({
     id: tenantId,
-    approvalStatus: result.approvalStatus,
+    approvalStatus: result.statuses,
     message: result.message,
   });
 }

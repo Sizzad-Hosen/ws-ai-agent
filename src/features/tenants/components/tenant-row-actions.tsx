@@ -22,12 +22,13 @@ import {
   decideTenantStatusAction,
   type TenantDecision,
 } from "@/features/tenants/actions/tenant-status-action";
-import type { TenantApprovalStatus } from "@/types/status";
+import type { TenantApprovalStatus, TenantStatus } from "@/types/status";
 
 interface TenantRowActionsProps {
   readonly tenantId: string;
   readonly businessName: string;
-  readonly status: TenantApprovalStatus;
+  readonly approvalStatus: TenantApprovalStatus;
+  readonly status: TenantStatus;
   readonly websiteUrl: string | null;
   readonly canManage: boolean;
 }
@@ -35,6 +36,7 @@ interface TenantRowActionsProps {
 export function TenantRowActions({
   tenantId,
   businessName,
+  approvalStatus,
   status,
   websiteUrl,
   canManage,
@@ -58,7 +60,8 @@ export function TenantRowActions({
     });
   }
 
-  const awaitingReview = status === "pending_review";
+  // Approving reads the verdict column; suspending reads the lifecycle one.
+  const awaitingReview = approvalStatus === "pending_review";
   const canSuspend = status === "active" || status === "trial";
   const canReactivate = status === "suspended";
   const hasLifecycleAction =

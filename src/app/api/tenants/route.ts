@@ -5,10 +5,7 @@ import { PLATFORM_PERMISSIONS } from "@/constants/permissions";
 import { authorizeApiRequest } from "@/server/api/authorization";
 import { apiData, apiError, apiFailure } from "@/server/api/http";
 import { repositories } from "@/server/repositories";
-import {
-  TENANT_APPROVAL_STATUSES,
-  WHATSAPP_CONNECTION_STATUSES,
-} from "@/types/status";
+import { TENANT_STATUSES, WHATSAPP_CONNECTION_STATUSES } from "@/types/status";
 
 /**
  * Unknown enum values are dropped rather than rejected: the tenants page does
@@ -16,7 +13,7 @@ import {
  */
 const querySchema = z.object({
   search: z.string().trim().max(100).optional(),
-  status: z.enum(TENANT_APPROVAL_STATUSES).optional().catch(undefined),
+  status: z.enum(TENANT_STATUSES).optional().catch(undefined),
   plan: z.string().trim().max(100).optional(),
   whatsapp: z.enum(WHATSAPP_CONNECTION_STATUSES).optional().catch(undefined),
   limit: z.coerce.number().int().min(1).max(100).default(20),

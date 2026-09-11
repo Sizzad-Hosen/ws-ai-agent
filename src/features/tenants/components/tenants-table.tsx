@@ -20,6 +20,8 @@ import type {
   TenantListItem,
 } from "@/features/tenants/types";
 import {
+  TENANT_APPROVAL_LABELS,
+  TENANT_APPROVAL_TONES,
   TENANT_STATUS_LABELS,
   TENANT_STATUS_TONES,
   WHATSAPP_STATUS_LABELS,
@@ -113,8 +115,10 @@ export function TenantsTable({
                 <WhatsappIcon status={null} />
               </TD>
               <TD>
-                <Badge tone={TENANT_STATUS_TONES.pending_review} dot>
-                  {TENANT_STATUS_LABELS.pending_review}
+                {/* An application has no lifecycle yet, so this row shows
+                    the verdict column instead. */}
+                <Badge tone={TENANT_APPROVAL_TONES.pending_review} dot>
+                  {TENANT_APPROVAL_LABELS.pending_review}
                 </Badge>
               </TD>
               <TD className="text-right">
@@ -193,15 +197,18 @@ export function TenantsTable({
                   <WhatsappIcon status={metrics.whatsappStatus} />
                 </TD>
                 <TD>
-                  <Badge tone={TENANT_STATUS_TONES[tenant.approvalStatus]}>
-                    {TENANT_STATUS_LABELS[tenant.approvalStatus]}
+                  {/* Live tenants show what the workspace is doing. The
+                      verdict is settled and no longer the interesting fact. */}
+                  <Badge tone={TENANT_STATUS_TONES[tenant.status]}>
+                    {TENANT_STATUS_LABELS[tenant.status]}
                   </Badge>
                 </TD>
                 <TD className="text-right">
                   <TenantRowActions
                     tenantId={tenant.id}
                     businessName={tenant.businessName}
-                    status={tenant.approvalStatus}
+                    approvalStatus={tenant.approvalStatus}
+                    status={tenant.status}
                     websiteUrl={tenant.websiteUrl}
                     canManage={canManage}
                   />

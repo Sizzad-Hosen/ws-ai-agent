@@ -31,6 +31,7 @@ export const AUDIT_ACTIONS = {
   PLAN_DELETE: "plan.delete",
   AI_CONFIGURATION_UPDATE: "ai_configuration.update",
   SITE_SETTINGS_UPDATE: "site_settings.update",
+  TENANT_IMPERSONATE: "tenant.impersonate",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -41,6 +42,14 @@ export interface AuditEntry {
   readonly entityType: "tenant" | "registration" | "plan" | "settings";
   /** Null for settings that are not a row, such as the AI configuration. */
   readonly entityId?: string | null;
+  /** Set when the action names a tenant, for the retention index. */
+  readonly tenantId?: string | null;
+  /**
+   * Required for impersonation and rejected when blank, which the calling
+   * action enforces. `admin_audit_logs.reason` is nullable because most
+   * actions legitimately have none.
+   */
+  readonly reason?: string | null;
   readonly metadata?: Record<string, unknown>;
 }
 
@@ -97,14 +106,17 @@ export async function recordAudit(entry: AuditEntry): Promise<void> {
   const ipAddress = await addressOrNull();
 
   try {
-    await prisma.platformAuditLog.create({
+    await prisma.adminAuditLog.create({
       data: {
-        actorId: entry.actor.id,
-        actorEmail: entry.actor.email,
+        // The actor is the FK, not a copied email: `admin_users` is
+        // ON DELETE RESTRICT, so the join can never dangle.
+        adminUserId: entry.actor.id,
+        tenantId: entry.tenantId ?? null,
         action: entry.action,
-        entityType: entry.entityType,
-        entityId: entry.entityId ?? null,
-        metadata: scrubAuditMetadata(entry.metadata),
+        reason: entry.reason ?? null,
+        resourceType: entry.entityType,
+        resourceId: entry.entityId ?? null,
+        newValues: scrubAuditMetadata(entry.metadata),
         ipAddress,
       },
     });

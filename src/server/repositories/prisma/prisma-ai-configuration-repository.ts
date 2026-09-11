@@ -21,8 +21,6 @@ const CONFIGURATION_FIELDS = {
   globalTokenLimit: true,
   defaultTenantTokenLimit: true,
   warningThresholdPercent: true,
-  createdAt: true,
-  updatedAt: true,
 } as const;
 
 export class PrismaAiConfigurationRepository implements AiConfigurationRepository {
@@ -31,7 +29,9 @@ export class PrismaAiConfigurationRepository implements AiConfigurationRepositor
       prisma.platformAiConfiguration.findFirst({
         where: { isActive: true },
         select: CONFIGURATION_FIELDS,
-        orderBy: { updatedAt: Prisma.SortOrder.desc },
+        // The table has no updated_at, so "most recent" is not available.
+        // The default row wins instead, which is the one the platform uses.
+        orderBy: { isDefault: Prisma.SortOrder.desc },
       }),
       prisma.aiProvider.findMany({ orderBy: { name: Prisma.SortOrder.asc } }),
       prisma.aiModel.findMany({
@@ -61,8 +61,8 @@ export class PrismaAiConfigurationRepository implements AiConfigurationRepositor
             // The stored value is a secret-manager pointer, not the key, and
             // is never read back — so there is no fingerprint to show.
             credentialFingerprint: null,
-            credentialRotatedAt: configuration.updatedAt.toISOString(),
-            updatedAt: configuration.updatedAt.toISOString(),
+            credentialRotatedAt: null,
+            updatedAt: null,
           }
         : {
             // No configuration row yet: render the form in an unconfigured
@@ -76,7 +76,7 @@ export class PrismaAiConfigurationRepository implements AiConfigurationRepositor
             warningThresholdPercent: null,
             credentialFingerprint: null,
             credentialRotatedAt: null,
-            updatedAt: new Date().toISOString(),
+            updatedAt: null,
           },
       providers: providers.map(mapAiProvider),
       models: models.map(mapAiModel),
@@ -91,7 +91,7 @@ export class PrismaAiConfigurationRepository implements AiConfigurationRepositor
 
   async save(values: AiConfigurationSettings): Promise<void> {
     const existing = await prisma.platformAiConfiguration.findFirst({
-      orderBy: { updatedAt: Prisma.SortOrder.desc },
+      orderBy: { isDefault: Prisma.SortOrder.desc },
       select: { id: true },
     });
 

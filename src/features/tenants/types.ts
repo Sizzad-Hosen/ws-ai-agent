@@ -1,25 +1,37 @@
 import type {
   ProvisioningStatus,
   TenantApprovalStatus,
+  TenantStatus,
   WebhookStatus,
   WhatsappConnectionStatus,
 } from "@/types/status";
 
-/** `tenants` in the master ERD. */
+/** `tenants`. */
 export interface Tenant {
   readonly id: string;
   readonly tenantCode: string;
+  /** `tenants.slug` — the DNS label and the tenant site's path segment. */
+  readonly slug: string;
   readonly businessName: string;
   readonly ownerName: string;
   readonly ownerEmail: string;
-  readonly ownerPhone: string;
+  readonly ownerPhone: string | null;
   readonly industry: string | null;
+  /** `tenants.business_region`. */
   readonly region: string | null;
-  /** Public storefront URL. Null when the tenant has no site on file. */
+  /**
+   * Public storefront URL, derived from `slug` rather than stored.
+   *
+   * Null when neither an app origin nor a root domain is configured, because
+   * an unroutable link is worse than an honest blank.
+   */
   readonly websiteUrl: string | null;
+  /** The reviewer's verdict. */
   readonly approvalStatus: TenantApprovalStatus;
+  /** What the workspace is doing, which approval alone does not say. */
+  readonly status: TenantStatus;
   readonly createdAt: string;
-  /** `tenants.registration_id` — proposed in 2.5 / D-02, shown on screen 04. */
+  /** `tenants.registration_id`, shown on screen 04. */
   readonly registrationCode: string | null;
 }
 
@@ -28,9 +40,9 @@ export interface TenantDatabase {
   readonly id: string;
   readonly tenantId: string;
   readonly databaseName: string;
-  readonly region: string;
+  readonly region: string | null;
   readonly status: ProvisioningStatus;
-  readonly schemaVersion: string;
+  readonly schemaVersion: string | null;
   /** Display identifier for the host, never the connection string itself. */
   readonly instanceLabel: string;
   readonly lastBackupAt: string | null;
@@ -106,7 +118,8 @@ export interface TenantDetail {
 
 export interface TenantListFilters {
   readonly search?: string;
-  readonly status?: TenantApprovalStatus;
+  /** Filters the lifecycle column, which is what screen 02 shows. */
+  readonly status?: TenantStatus;
   readonly planCode?: string;
   readonly whatsapp?: WhatsappConnectionStatus;
 }

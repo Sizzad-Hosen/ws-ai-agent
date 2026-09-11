@@ -28,15 +28,14 @@ export interface Subscription {
 export interface Invoice {
   readonly id: string;
   readonly tenantId: string;
-  readonly subscriptionId: string;
+  /** Null for an invoice not tied to a subscription. */
+  readonly subscriptionId: string | null;
   readonly invoiceNumber: string;
   readonly status: InvoiceStatus;
   readonly subtotal: string;
   readonly tax: string;
   readonly total: string;
   readonly currency: string;
-  readonly dueAt: string | null;
-  readonly paidAt: string | null;
 }
 
 /**

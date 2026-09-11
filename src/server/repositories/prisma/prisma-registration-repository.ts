@@ -13,6 +13,7 @@ import type {
   RegistrationRepository,
 } from "@/server/repositories/contracts/registration-repository";
 import type { PaginatedResult } from "@/types/repository";
+import { REVIEW_QUEUE_STATUSES } from "@/types/status";
 
 import {
   checkStatusToPrisma,
@@ -25,6 +26,11 @@ import {
 type RegistrationWithChecks = Prisma.TenantRegistrationGetPayload<{
   include: { checks: true; requestedPlan: true };
 }>;
+
+/** The Prisma spelling of `REVIEW_QUEUE_STATUSES`, for `where` clauses. */
+const QUEUE_STATUSES = REVIEW_QUEUE_STATUSES.map(
+  (status) => registrationStatusToPrisma[status],
+);
 
 const INCLUDE = {
   checks: { orderBy: { checkType: Prisma.SortOrder.asc } },
@@ -55,9 +61,16 @@ export class PrismaRegistrationRepository implements RegistrationRepository {
     const offset = query.offset ?? 0;
 
     const where: Prisma.TenantRegistrationWhereInput = {
-      ...(query.status
-        ? { status: registrationStatusToPrisma[query.status] }
-        : {}),
+      ...(query.status === undefined
+        ? {}
+        : {
+            status: {
+              in: (typeof query.status === "string"
+                ? [query.status]
+                : query.status
+              ).map((status) => registrationStatusToPrisma[status]),
+            },
+          }),
       ...(query.search
         ? {
             OR: [
@@ -90,7 +103,7 @@ export class PrismaRegistrationRepository implements RegistrationRepository {
       take: limit,
       // Newest application first: the review queue is worked from the top, and
       // registration_code is not an arrival order.
-      orderBy: { createdAt: Prisma.SortOrder.desc },
+      orderBy: { submittedAt: Prisma.SortOrder.desc },
       include: INCLUDE,
     });
     const total = await prisma.tenantRegistration.count({ where });
@@ -100,8 +113,9 @@ export class PrismaRegistrationRepository implements RegistrationRepository {
   }
 
   async countPending(): Promise<number> {
+    // Both queue statuses: a reviewer opening an application does not decide it.
     return prisma.tenantRegistration.count({
-      where: { status: "PENDING_REVIEW" },
+      where: { status: { in: QUEUE_STATUSES } },
     });
   }
 
@@ -110,7 +124,7 @@ export class PrismaRegistrationRepository implements RegistrationRepository {
       // A rejected applicant may re-apply; a live one may not queue twice.
       where: {
         ownerEmail: email,
-        status: { in: ["PENDING_REVIEW", "APPROVED"] },
+        status: { in: [...QUEUE_STATUSES, "APPROVED"] },
       },
       select: { id: true },
     });
@@ -127,7 +141,7 @@ export class PrismaRegistrationRepository implements RegistrationRepository {
       data: {
         ...values,
         registrationCode: code,
-        status: "PENDING_REVIEW",
+        status: "SUBMITTED",
         checks: {
           create: [
             { checkType: "BUSINESS_VERIFICATION" },
@@ -154,7 +168,7 @@ export class PrismaRegistrationRepository implements RegistrationRepository {
 
       if (!registration) return { ok: false, reason: "not-found" } as const;
 
-      if (registration.status !== "PENDING_REVIEW") {
+      if (!QUEUE_STATUSES.includes(registration.status)) {
         return { ok: false, reason: "not-pending" } as const;
       }
 

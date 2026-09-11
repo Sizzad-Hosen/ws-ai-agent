@@ -12,15 +12,11 @@ export interface TenantRegistration {
   readonly ownerName: string;
   readonly ownerEmail: string;
   readonly ownerPhone: string;
-  readonly industry: string;
-  readonly region: string;
+  readonly industry: string | null;
+  readonly region: string | null;
   readonly requestedPlanId: string | null;
   readonly status: RegistrationStatus;
-  /**
-   * `tenant_registrations.created_at`. Not on the ERD; added so screen 03 can
-   * show a real "Signed up" date and the review queue can order by arrival —
-   * see D-34 in docs/IMPLEMENTATION_PLAN.md.
-   */
+  /** `tenant_registrations.submitted_at`, which the queue orders by. */
   readonly submittedAt: string;
 }
 

@@ -6,7 +6,13 @@ import type { ListQuery, PaginatedResult } from "@/types/repository";
 import type { RegistrationCheckType, RegistrationStatus } from "@/types/status";
 
 export interface RegistrationListQuery extends ListQuery {
-  readonly status?: RegistrationStatus;
+  /**
+   * One status, or any of several.
+   *
+   * The review queue needs the list form: `submitted` and `in_review` are both
+   * awaiting a decision, and filtering on one alone hides the other.
+   */
+  readonly status?: RegistrationStatus | readonly RegistrationStatus[];
 }
 
 export interface NewRegistration {

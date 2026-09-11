@@ -35,16 +35,18 @@ export default async function TenantSitePage({
 
   // A workspace that is not live has no storefront. Suspended says so; anything
   // else is indistinguishable from a URL that was never a tenant.
-  if (site.approvalStatus === "suspended") {
+  if (site.status === "suspended") {
     return <Unavailable site={site} />;
   }
 
-  if (site.approvalStatus !== "active" && site.approvalStatus !== "trial") {
+  if (site.status !== "active" && site.status !== "trial") {
     notFound();
   }
 
   const live = site.databaseStatus === "ready";
-  const chat = whatsappLink(site.whatsappNumber);
+  // `tenants.owner_phone` is nullable, so the storefront may have no number to
+  // link to. The button is dropped rather than pointed at an empty chat.
+  const chat = site.whatsappNumber ? whatsappLink(site.whatsappNumber) : null;
 
   return (
     <>
@@ -53,13 +55,15 @@ export default async function TenantSitePage({
           <span className="text-ps-ink font-display truncate text-xl font-semibold tracking-tight">
             {site.businessName}
           </span>
-          <a
-            href={chat}
-            className="bg-ps-brand-deep rounded-control inline-flex h-10 shrink-0 items-center gap-2 px-4 text-[15px] font-medium text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            <MessageCircle className="size-4" aria-hidden="true" />
-            Chat on WhatsApp
-          </a>
+          {chat ? (
+            <a
+              href={chat}
+              className="bg-ps-brand-deep rounded-control inline-flex h-10 shrink-0 items-center gap-2 px-4 text-[15px] font-medium text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              <MessageCircle className="size-4" aria-hidden="true" />
+              Chat on WhatsApp
+            </a>
+          ) : null}
         </div>
       </header>
 
@@ -76,18 +80,20 @@ export default async function TenantSitePage({
             WhatsApp. The assistant answers in seconds, day or night.
           </p>
 
-          <div className="mt-8 flex flex-wrap items-center gap-4">
-            <a
-              href={chat}
-              className="bg-ps-ink rounded-control inline-flex h-12 items-center gap-2 px-6 text-[15px] font-medium text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
-            >
-              <MessageCircle className="size-4" aria-hidden="true" />
-              Start a chat
-            </a>
-            <span className="text-ps-ink-subtle tabular text-sm">
-              {site.whatsappNumber}
-            </span>
-          </div>
+          {chat ? (
+            <div className="mt-8 flex flex-wrap items-center gap-4">
+              <a
+                href={chat}
+                className="bg-ps-ink rounded-control inline-flex h-12 items-center gap-2 px-6 text-[15px] font-medium text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                <MessageCircle className="size-4" aria-hidden="true" />
+                Start a chat
+              </a>
+              <span className="text-ps-ink-subtle tabular text-sm">
+                {site.whatsappNumber}
+              </span>
+            </div>
+          ) : null}
 
           {live ? null : (
             <p

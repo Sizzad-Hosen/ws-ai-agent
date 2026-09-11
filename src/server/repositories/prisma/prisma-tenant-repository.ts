@@ -1,4 +1,4 @@
-import { Prisma, TenantApprovalStatus } from "@prisma/client";
+import { Prisma, TenantStatus } from "@prisma/client";
 
 import type {
   Tenant,
@@ -11,9 +11,9 @@ import type {
   TenantRepository,
   TenantRoutingTarget,
   TenantSite,
+  TenantStatusChange,
 } from "@/server/repositories/contracts/tenant-repository";
 import type { PaginatedResult } from "@/types/repository";
-import type { TenantApprovalStatus as DomainTenantApprovalStatus } from "@/types/status";
 
 import {
   mapPlan,
@@ -22,6 +22,8 @@ import {
   provisioningMap,
   tenantApprovalMap,
   tenantApprovalToPrisma,
+  tenantStatusMap,
+  tenantStatusToPrisma,
 } from "./mappers";
 
 /** The subscription that determines the plan and MRR shown for a tenant. */
@@ -37,11 +39,12 @@ export class PrismaTenantRepository implements TenantRepository {
     subdomain: string,
   ): Promise<TenantRoutingTarget | null> {
     const tenant = await prisma.tenant.findUnique({
-      where: { subdomain },
+      where: { slug: subdomain },
       select: {
         id: true,
         businessName: true,
         approvalStatus: true,
+        status: true,
         database: {
           select: {
             databaseName: true,
@@ -61,6 +64,7 @@ export class PrismaTenantRepository implements TenantRepository {
       tenantId: tenant.id,
       businessName: tenant.businessName,
       approvalStatus: tenantApprovalMap[tenant.approvalStatus],
+      status: tenantStatusMap[tenant.status],
       databaseName: tenant.database.databaseName,
       host: tenant.database.hostReference,
       port: tenant.database.port,
@@ -77,19 +81,20 @@ export class PrismaTenantRepository implements TenantRepository {
 
   async findSiteBySubdomain(subdomain: string): Promise<TenantSite | null> {
     const tenant = await prisma.tenant.findUnique({
-      where: { subdomain },
+      where: { slug: subdomain },
       // An explicit select, not an include: this row is rendered for anonymous
       // visitors, so the columns it may not carry are excluded here rather than
       // filtered later.
       select: {
         id: true,
         businessName: true,
-        subdomain: true,
+        slug: true,
         ownerName: true,
         ownerPhone: true,
         industry: true,
-        region: true,
+        businessRegion: true,
         approvalStatus: true,
+        status: true,
         createdAt: true,
         database: { select: { status: true } },
         subscriptions: {
@@ -101,18 +106,19 @@ export class PrismaTenantRepository implements TenantRepository {
       },
     });
 
-    if (!tenant?.subdomain) return null;
+    if (!tenant) return null;
 
     return {
       tenantId: tenant.id,
       businessName: tenant.businessName,
-      slug: tenant.subdomain,
+      slug: tenant.slug,
       industry: tenant.industry,
-      region: tenant.region,
+      region: tenant.businessRegion,
       ownerName: tenant.ownerName,
       whatsappNumber: tenant.ownerPhone,
       planName: tenant.subscriptions[0]?.plan.name ?? null,
       approvalStatus: tenantApprovalMap[tenant.approvalStatus],
+      status: tenantStatusMap[tenant.status],
       databaseStatus: tenant.database
         ? provisioningMap[tenant.database.status]
         : null,
@@ -159,9 +165,10 @@ export class PrismaTenantRepository implements TenantRepository {
     const offset = query.offset ?? 0;
 
     const where: Prisma.TenantWhereInput = {
-      ...(query.status
-        ? { approvalStatus: tenantApprovalToPrisma[query.status] }
-        : {}),
+      // `tenants` is soft-deleted, and the step-4 partial index assumes every
+      // list read excludes the deleted rows.
+      deletedAt: null,
+      ...(query.status ? { status: tenantStatusToPrisma[query.status] } : {}),
       ...(query.planCode
         ? {
             subscriptions: {
@@ -238,22 +245,28 @@ export class PrismaTenantRepository implements TenantRepository {
   }
 
   async count(): Promise<number> {
-    return prisma.tenant.count();
+    return prisma.tenant.count({ where: { deletedAt: null } });
   }
 
   async countActive(): Promise<number> {
+    // Active is a lifecycle state, not a verdict: an approved tenant still
+    // provisioning is not yet active.
     return prisma.tenant.count({
-      where: { approvalStatus: TenantApprovalStatus.ACTIVE },
+      where: { deletedAt: null, status: TenantStatus.ACTIVE },
     });
   }
 
-  async updateApprovalStatus(
-    id: string,
-    status: DomainTenantApprovalStatus,
-  ): Promise<void> {
+  async updateStatuses(id: string, change: TenantStatusChange): Promise<void> {
     await prisma.tenant.update({
       where: { id },
-      data: { approvalStatus: tenantApprovalToPrisma[status] },
+      data: {
+        ...(change.approvalStatus
+          ? { approvalStatus: tenantApprovalToPrisma[change.approvalStatus] }
+          : {}),
+        ...(change.status
+          ? { status: tenantStatusToPrisma[change.status] }
+          : {}),
+      },
     });
   }
 }

@@ -34,7 +34,12 @@ export interface PlatformAiConfiguration {
   /** Last four characters only, for "is this the key I expect?" recognition. */
   readonly credentialFingerprint: string | null;
   readonly credentialRotatedAt: string | null;
-  readonly updatedAt: string;
+  /**
+   * Null always: `platform_ai_configurations` has no `updated_at` column in
+   * master-db.sql. Kept on the view so the screen can say "unknown" rather
+   * than invent a time the row was never stamped with.
+   */
+  readonly updatedAt: string | null;
 }
 
 /** Screen 09 aggregate. */

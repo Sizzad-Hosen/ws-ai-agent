@@ -5,7 +5,11 @@ import type {
   TenantListItem,
 } from "@/features/tenants/types";
 import type { ListQuery, PaginatedResult } from "@/types/repository";
-import type { ProvisioningStatus, TenantApprovalStatus } from "@/types/status";
+import type {
+  ProvisioningStatus,
+  TenantApprovalStatus,
+  TenantStatus,
+} from "@/types/status";
 
 export interface TenantListQuery extends ListQuery, TenantListFilters {}
 
@@ -14,6 +18,7 @@ export interface TenantRoutingTarget {
   readonly tenantId: string;
   readonly businessName: string;
   readonly approvalStatus: TenantApprovalStatus;
+  readonly status: TenantStatus;
   readonly databaseName: string;
   readonly host: string;
   readonly port: number;
@@ -30,10 +35,11 @@ export interface TenantSite {
   readonly industry: string | null;
   readonly region: string | null;
   readonly ownerName: string;
-  /** `tenants.owner_phone` — the number the AI agent answers on. */
-  readonly whatsappNumber: string;
+  /** `tenants.owner_phone` — the number the AI agent answers on. Nullable. */
+  readonly whatsappNumber: string | null;
   readonly planName: string | null;
   readonly approvalStatus: TenantApprovalStatus;
+  readonly status: TenantStatus;
   /** Null when the tenant has no database record at all. */
   readonly databaseStatus: ProvisioningStatus | null;
   readonly since: string;
@@ -61,5 +67,18 @@ export interface TenantRepository {
   findMany(query?: TenantListQuery): Promise<PaginatedResult<TenantListItem>>;
   count(): Promise<number>;
   countActive(): Promise<number>;
-  updateApprovalStatus(id: string, status: TenantApprovalStatus): Promise<void>;
+  /**
+   * Writes whichever status columns a decision moves.
+   *
+   * One method rather than two, because approval also starts the workspace:
+   * splitting it would let a caller commit the verdict and forget the
+   * lifecycle, leaving an approved tenant that never begins provisioning.
+   */
+  updateStatuses(id: string, change: TenantStatusChange): Promise<void>;
+}
+
+/** The status columns a decision writes. Omitted keys are left alone. */
+export interface TenantStatusChange {
+  readonly approvalStatus?: TenantApprovalStatus;
+  readonly status?: TenantStatus;
 }

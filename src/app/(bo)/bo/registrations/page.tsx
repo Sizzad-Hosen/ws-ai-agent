@@ -21,6 +21,7 @@ import { ROUTES } from "@/constants/routes";
 import { countPassedChecks } from "@/features/registrations/types";
 import { requirePermission } from "@/server/auth/authorization";
 import { repositories } from "@/server/repositories";
+import { REVIEW_QUEUE_STATUSES } from "@/types/status";
 import { formatOptionalDate } from "@/utils/format";
 
 export const metadata: Metadata = {
@@ -40,7 +41,7 @@ export default async function RegistrationsPage({
   const offset = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 
   const result = await repositories.registrations.findMany({
-    status: "pending_review",
+    status: REVIEW_QUEUE_STATUSES,
     limit: PAGE_SIZE,
     offset,
   });

@@ -1,38 +1,66 @@
 /**
  * Enum members for the master schema.
  *
- * Every enum column in `docs/db/SaaS Master DB — BO + Public Site.png` is drawn
- * simply as `enum` with no members (see 2.6 / D-03 in
- * docs/IMPLEMENTATION_PLAN.md). The members below are the evidence-based
- * proposals from that decision: values visible in the mockups are marked, the
- * rest are conventional defaults awaiting confirmation.
+ * These mirror the native Postgres enums in `docs/db/master-db.sql`, which is
+ * the source of truth. Values are lowercase there and lowercase here; the
+ * Prisma client spells the same members SCREAMING_SNAKE, and
+ * `src/server/repositories/prisma/mappers.ts` translates at that boundary.
+ *
+ * Adding a member to the SQL file and to the list below makes every exhaustive
+ * map over it fail to compile until the new case is handled.
  */
 
 export const ADMIN_STATUSES = ["invited", "active", "suspended"] as const;
 export type AdminStatus = (typeof ADMIN_STATUSES)[number];
 
 /**
- * `tenants.approval_status`. Screen 02 renders Active / Trial / Suspended and
- * screen 03 renders Pending Review, so this single column currently carries
- * both approval and lifecycle meaning — flagged as D-06.
+ * `tenants.approval_status` — the reviewer's verdict, and nothing else.
+ *
+ * The old schema merged approval and lifecycle into one column, which is why
+ * screen 02 rendered Active / Trial / Suspended from the same field screen 03
+ * read as Pending Review. `master-db.sql` splits them: this column records the
+ * decision, `tenants.status` records what the workspace is doing.
  */
 export const TENANT_APPROVAL_STATUSES = [
-  "pending_review",
-  "trial",
-  "active",
-  "suspended",
-  "rejected",
-  "archived",
-] as const;
-export type TenantApprovalStatus = (typeof TENANT_APPROVAL_STATUSES)[number];
-
-/** `tenant_registrations.status`. */
-export const REGISTRATION_STATUSES = [
   "pending_review",
   "approved",
   "rejected",
 ] as const;
+export type TenantApprovalStatus = (typeof TENANT_APPROVAL_STATUSES)[number];
+
+/** `tenants.status` — the workspace lifecycle, once approved. */
+export const TENANT_STATUSES = [
+  "provisioning",
+  "trial",
+  "active",
+  "suspended",
+  "archived",
+] as const;
+export type TenantStatus = (typeof TENANT_STATUSES)[number];
+
+/** `tenant_registrations.status`. */
+export const REGISTRATION_STATUSES = [
+  "submitted",
+  "in_review",
+  "approved",
+  "rejected",
+] as const;
 export type RegistrationStatus = (typeof REGISTRATION_STATUSES)[number];
+
+/**
+ * The statuses that keep a registration in the review queue.
+ *
+ * `in_review` is still pending a decision — a reviewer having opened it is not
+ * a verdict — so every "is this awaiting review" test must accept both. Reading
+ * `status === "submitted"` would silently drop registrations mid-review.
+ */
+export const REVIEW_QUEUE_STATUSES = ["submitted", "in_review"] as const;
+
+export function isAwaitingReview(status: RegistrationStatus): boolean {
+  return (REVIEW_QUEUE_STATUSES as readonly RegistrationStatus[]).includes(
+    status,
+  );
+}
 
 /** `tenant_registration_checks.check_type` — the three items on screen 03. */
 export const REGISTRATION_CHECK_TYPES = [
@@ -88,9 +116,9 @@ export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 export const AI_PROVIDER_STATUSES = ["active", "inactive"] as const;
 export type AiProviderStatus = (typeof AI_PROVIDER_STATUSES)[number];
 
-/** `public_pages.status`. */
-export const PUBLIC_PAGE_STATUSES = ["draft", "published", "archived"] as const;
-export type PublicPageStatus = (typeof PUBLIC_PAGE_STATUSES)[number];
+/** `blog_posts.status`. */
+export const BLOG_POST_STATUSES = ["draft", "published", "archived"] as const;
+export type BlogPostStatus = (typeof BLOG_POST_STATUSES)[number];
 
 /*
  * The types below back screens 11 and 12, which have no tables in the ERD at

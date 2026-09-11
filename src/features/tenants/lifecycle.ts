@@ -7,8 +7,9 @@ import {
   type AuditAction,
 } from "@/server/audit/audit-log";
 import type { BoSessionAdmin } from "@/server/auth/types";
+import type { TenantStatusChange } from "@/server/repositories/contracts/tenant-repository";
 import { repositories } from "@/server/repositories";
-import type { TenantApprovalStatus } from "@/types/status";
+import type { TenantApprovalStatus, TenantStatus } from "@/types/status";
 
 export const TENANT_DECISIONS = [
   "approve",
@@ -19,8 +20,21 @@ export const TENANT_DECISIONS = [
 
 export type TenantDecision = (typeof TENANT_DECISIONS)[number];
 
+/** The two status columns a decision reads, and may write. */
+export interface TenantStatusPair {
+  readonly approvalStatus: TenantApprovalStatus;
+  readonly status: TenantStatus;
+}
+
 /**
  * Legal transitions, enforced on the server.
+ *
+ * `tenants` carries two status columns and a decision moves exactly one of
+ * them. Approving or rejecting is a verdict on the application, so it reads and
+ * writes `approval_status`; suspending or reactivating is an operational act on
+ * a workspace that was approved long ago, so it reads and writes `status`.
+ * Testing a suspension against the approval column — as the merged-column
+ * schema forced — would let an approved-but-archived tenant be suspended.
  *
  * The table only renders the buttons that apply, but a hidden button is a
  * convenience and not an access control: a stale page or a direct call must
@@ -29,36 +43,61 @@ export type TenantDecision = (typeof TENANT_DECISIONS)[number];
  * These rules live here rather than in either caller so the server action and
  * the REST route cannot drift apart.
  */
-const TRANSITIONS: Readonly<
-  Record<
-    TenantDecision,
-    { from: readonly TenantApprovalStatus[]; to: TenantApprovalStatus }
-  >
-> = {
-  approve: { from: ["pending_review"], to: "active" },
-  reject: { from: ["pending_review"], to: "rejected" },
-  suspend: { from: ["active", "trial"], to: "suspended" },
-  reactivate: { from: ["suspended"], to: "active" },
+type Transition =
+  | {
+      readonly kind: "approval";
+      readonly from: readonly TenantApprovalStatus[];
+      readonly to: TenantApprovalStatus;
+      /** Approval also starts the workspace. Rejection leaves it untouched. */
+      readonly thenStatus?: TenantStatus;
+    }
+  | {
+      readonly kind: "lifecycle";
+      readonly from: readonly TenantStatus[];
+      readonly to: TenantStatus;
+    };
+
+const TRANSITIONS: Readonly<Record<TenantDecision, Transition>> = {
+  approve: {
+    kind: "approval",
+    from: ["pending_review"],
+    to: "approved",
+    // Approved is a verdict, not a running workspace: the database still has
+    // to be built before the tenant is anything but provisioning.
+    thenStatus: "provisioning",
+  },
+  reject: { kind: "approval", from: ["pending_review"], to: "rejected" },
+  suspend: { kind: "lifecycle", from: ["active", "trial"], to: "suspended" },
+  reactivate: { kind: "lifecycle", from: ["suspended"], to: "active" },
 };
 
-/** The status a decision moves a tenant to, regardless of where it starts. */
-export function targetStatusFor(
-  decision: TenantDecision,
-): TenantApprovalStatus {
-  return TRANSITIONS[decision].to;
+/** The columns a decision writes, regardless of where the tenant starts. */
+export function changeFor(decision: TenantDecision): TenantStatusChange {
+  const transition = TRANSITIONS[decision];
+
+  return transition.kind === "approval"
+    ? {
+        approvalStatus: transition.to,
+        ...(transition.thenStatus ? { status: transition.thenStatus } : {}),
+      }
+    : { status: transition.to };
 }
 
 /**
- * Whether a decision is legal from a given status.
+ * Whether a decision is legal for a tenant's current pair of statuses.
  *
  * Exported so the rule can be tested without a database, and so neither caller
  * has to reach into the table.
  */
 export function isLegalTransition(
-  from: TenantApprovalStatus,
+  current: TenantStatusPair,
   decision: TenantDecision,
 ): boolean {
-  return TRANSITIONS[decision].from.includes(from);
+  const transition = TRANSITIONS[decision];
+
+  return transition.kind === "approval"
+    ? transition.from.includes(current.approvalStatus)
+    : transition.from.includes(current.status);
 }
 
 const PAST_TENSE: Readonly<Record<TenantDecision, string>> = {
@@ -74,8 +113,8 @@ export type TenantDecisionOutcome =
 export interface TenantDecisionResult {
   readonly outcome: TenantDecisionOutcome;
   readonly message: string;
-  /** The status the tenant now holds; null when nothing changed. */
-  readonly approvalStatus: TenantApprovalStatus | null;
+  /** The statuses the tenant now holds; null when nothing changed. */
+  readonly statuses: TenantStatusPair | null;
 }
 
 const AUDIT_ACTION_FOR: Readonly<Record<TenantDecision, AuditAction>> = {
@@ -109,7 +148,7 @@ export async function applyTenantDecision(
     return {
       outcome: "failed",
       message: "That change could not be saved. Please try again.",
-      approvalStatus: null,
+      statuses: null,
     };
   }
 
@@ -117,29 +156,34 @@ export async function applyTenantDecision(
     return {
       outcome: "not-found",
       message: "That tenant no longer exists.",
-      approvalStatus: null,
+      statuses: null,
     };
   }
 
-  if (!isLegalTransition(tenant.approvalStatus, decision)) {
+  const before: TenantStatusPair = {
+    approvalStatus: tenant.approvalStatus,
+    status: tenant.status,
+  };
+
+  if (!isLegalTransition(before, decision)) {
     return {
       outcome: "illegal-transition",
       message: `${tenant.businessName} cannot be ${PAST_TENSE[decision]} from its current status.`,
-      approvalStatus: tenant.approvalStatus,
+      statuses: before,
     };
   }
 
+  const change = changeFor(decision);
+  const after: TenantStatusPair = { ...before, ...change };
+
   try {
-    await repositories.tenants.updateApprovalStatus(
-      tenantId,
-      targetStatusFor(decision),
-    );
+    await repositories.tenants.updateStatuses(tenantId, change);
   } catch (error: unknown) {
     console.error("Unable to record the tenant status decision.", error);
     return {
       outcome: "failed",
       message: "That change could not be saved. Please try again.",
-      approvalStatus: tenant.approvalStatus,
+      statuses: before,
     };
   }
 
@@ -148,16 +192,18 @@ export async function applyTenantDecision(
     action: AUDIT_ACTION_FOR[decision],
     entityType: "tenant",
     entityId: tenantId,
+    tenantId,
+    // Both columns, because a reader cannot tell which one moved otherwise.
     metadata: {
       businessName: tenant.businessName,
-      from: tenant.approvalStatus,
-      to: targetStatusFor(decision),
+      from: before,
+      to: after,
     },
   });
 
   return {
     outcome: "applied",
     message: `${tenant.businessName} ${PAST_TENSE[decision]}.`,
-    approvalStatus: targetStatusFor(decision),
+    statuses: after,
   };
 }

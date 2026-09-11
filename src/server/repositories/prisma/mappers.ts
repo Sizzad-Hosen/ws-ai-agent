@@ -9,6 +9,7 @@ import {
   RegistrationStatus as PrismaRegistrationStatus,
   SubscriptionStatus as PrismaSubscriptionStatus,
   TenantApprovalStatus as PrismaTenantApprovalStatus,
+  TenantStatus as PrismaTenantStatus,
   TenantDatabaseStatus as PrismaTenantDatabaseStatus,
   type AdminUser as PrismaAdminUser,
   type AiModel as PrismaAiModel,
@@ -26,8 +27,10 @@ import {
   PLATFORM_ADMIN_ROLES,
   type PlatformAdminRole,
 } from "@/constants/roles";
+import { env } from "@/config/env";
 import type { AiModel, AiProvider } from "@/features/ai-settings/types";
 import type { PlatformAdmin } from "@/features/auth/types";
+import { buildWebsiteUrl } from "@/features/registrations/provisioning";
 import {
   EMPTY_PLAN_FEATURES,
   type Plan,
@@ -50,6 +53,7 @@ import type {
   RegistrationStatus,
   SubscriptionStatus,
   TenantApprovalStatus,
+  TenantStatus,
 } from "@/types/status";
 
 /*
@@ -76,11 +80,8 @@ export const tenantApprovalMap: Record<
   TenantApprovalStatus
 > = {
   [PrismaTenantApprovalStatus.PENDING_REVIEW]: "pending_review",
-  [PrismaTenantApprovalStatus.TRIAL]: "trial",
-  [PrismaTenantApprovalStatus.ACTIVE]: "active",
-  [PrismaTenantApprovalStatus.SUSPENDED]: "suspended",
+  [PrismaTenantApprovalStatus.APPROVED]: "approved",
   [PrismaTenantApprovalStatus.REJECTED]: "rejected",
-  [PrismaTenantApprovalStatus.ARCHIVED]: "archived",
 };
 
 export const tenantApprovalToPrisma: Record<
@@ -88,18 +89,32 @@ export const tenantApprovalToPrisma: Record<
   PrismaTenantApprovalStatus
 > = {
   pending_review: PrismaTenantApprovalStatus.PENDING_REVIEW,
-  trial: PrismaTenantApprovalStatus.TRIAL,
-  active: PrismaTenantApprovalStatus.ACTIVE,
-  suspended: PrismaTenantApprovalStatus.SUSPENDED,
+  approved: PrismaTenantApprovalStatus.APPROVED,
   rejected: PrismaTenantApprovalStatus.REJECTED,
-  archived: PrismaTenantApprovalStatus.ARCHIVED,
+};
+
+export const tenantStatusMap: Record<PrismaTenantStatus, TenantStatus> = {
+  [PrismaTenantStatus.PROVISIONING]: "provisioning",
+  [PrismaTenantStatus.TRIAL]: "trial",
+  [PrismaTenantStatus.ACTIVE]: "active",
+  [PrismaTenantStatus.SUSPENDED]: "suspended",
+  [PrismaTenantStatus.ARCHIVED]: "archived",
+};
+
+export const tenantStatusToPrisma: Record<TenantStatus, PrismaTenantStatus> = {
+  provisioning: PrismaTenantStatus.PROVISIONING,
+  trial: PrismaTenantStatus.TRIAL,
+  active: PrismaTenantStatus.ACTIVE,
+  suspended: PrismaTenantStatus.SUSPENDED,
+  archived: PrismaTenantStatus.ARCHIVED,
 };
 
 const registrationStatusMap: Record<
   PrismaRegistrationStatus,
   RegistrationStatus
 > = {
-  [PrismaRegistrationStatus.PENDING_REVIEW]: "pending_review",
+  [PrismaRegistrationStatus.SUBMITTED]: "submitted",
+  [PrismaRegistrationStatus.IN_REVIEW]: "in_review",
   [PrismaRegistrationStatus.APPROVED]: "approved",
   [PrismaRegistrationStatus.REJECTED]: "rejected",
 };
@@ -108,7 +123,8 @@ export const registrationStatusToPrisma: Record<
   RegistrationStatus,
   PrismaRegistrationStatus
 > = {
-  pending_review: PrismaRegistrationStatus.PENDING_REVIEW,
+  submitted: PrismaRegistrationStatus.SUBMITTED,
+  in_review: PrismaRegistrationStatus.IN_REVIEW,
   approved: PrismaRegistrationStatus.APPROVED,
   rejected: PrismaRegistrationStatus.REJECTED,
 };
@@ -216,14 +232,22 @@ export function mapTenant(
   return {
     id: tenant.id,
     tenantCode: tenant.tenantCode,
+    slug: tenant.slug,
     businessName: tenant.businessName,
     ownerName: tenant.ownerName,
     ownerEmail: tenant.ownerEmail,
     ownerPhone: tenant.ownerPhone,
     industry: tenant.industry,
-    region: tenant.region,
-    websiteUrl: tenant.websiteUrl,
+    region: tenant.businessRegion,
+    // Derived, not stored: `tenants` has no URL column, and a stored one would
+    // go stale the moment the root domain or the app origin changed.
+    websiteUrl: buildWebsiteUrl(
+      tenant.slug,
+      env.TENANT_ROOT_DOMAIN,
+      env.NEXT_PUBLIC_APP_URL,
+    ),
     approvalStatus: tenantApprovalMap[tenant.approvalStatus],
+    status: tenantStatusMap[tenant.status],
     createdAt: tenant.createdAt.toISOString(),
     registrationCode,
   };
@@ -320,8 +344,6 @@ export function mapInvoice(invoice: PrismaInvoice): Invoice {
     tax: invoice.tax.toFixed(2),
     total: invoice.total.toFixed(2),
     currency: invoice.currency,
-    dueAt: invoice.dueAt?.toISOString() ?? null,
-    paidAt: invoice.paidAt?.toISOString() ?? null,
   };
 }
 
@@ -339,7 +361,7 @@ export function mapRegistration(
     region: registration.region,
     requestedPlanId: registration.requestedPlanId,
     status: registrationStatusMap[registration.status],
-    submittedAt: registration.createdAt.toISOString(),
+    submittedAt: registration.submittedAt.toISOString(),
   };
 }
 
@@ -369,7 +391,7 @@ export function mapAiProvider(provider: PrismaAiProvider): AiProvider {
 export function mapAiModel(model: PrismaAiModel): AiModel {
   return {
     id: model.id,
-    providerId: model.providerId,
+    providerId: model.aiProviderId,
     modelName: model.modelName,
     capabilities: Array.isArray(model.capabilities)
       ? model.capabilities.filter(
