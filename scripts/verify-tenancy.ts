@@ -130,31 +130,34 @@ async function main(): Promise<void> {
       throw new Error("A suspended tenant lost its routing target entirely.");
     }
     check(
-      suspendedTarget.approvalStatus,
+      suspendedTarget.status,
       "suspended",
-      "suspended tenant reports its status",
+      "suspended tenant reports its lifecycle status",
     );
 
     console.log(
       `Tenancy verified: 15 host-parsing cases, secret provider policy, routing target for "${active.subdomain}" -> ${target.databaseName} (provisioned: ${target.provisioned}), suspended host still resolves but reports suspended. Fixtures removed.`,
     );
   } finally {
-    await prisma.tenant.deleteMany({
-      where: { id: { in: [active.id, suspended.id] } },
+    // No ON DELETE CASCADE anywhere, so the database rows go before their
+    // tenants do.
+    const ids = [active.id, suspended.id];
+    await prisma.tenantDatabase.deleteMany({
+      where: { tenantId: { in: ids } },
     });
+    await prisma.tenant.deleteMany({ where: { id: { in: ids } } });
   }
 }
 
 /** A tenant with a provisioned database, for the routing checks. */
 async function createFixture(
   label: string,
-  approvalStatus: "ACTIVE" | "SUSPENDED",
+  status: "ACTIVE" | "SUSPENDED",
   databaseStatus: "READY" | "PENDING",
 ): Promise<{ readonly id: string; readonly subdomain: string }> {
   const unique = `${label}-${Date.now().toString(36)}`;
   const databaseName = `sp_tenant_${unique.replace(/-/g, "_")}`;
 
-  // The database row cascades with the tenant, so cleanup is one delete.
   const tenant = await prisma.tenant.create({
     data: {
       tenantCode: `TEN-VERIFY-${unique.slice(-12)}`,
@@ -163,9 +166,12 @@ async function createFixture(
       ownerEmail: `${unique}@example.test`,
       ownerPhone: "+1 555 000 0000",
       industry: "Testing",
-      region: "US-East-1",
-      subdomain: unique,
-      approvalStatus,
+      businessRegion: "US-East-1",
+      slug: unique,
+      // The verdict is settled for every fixture here; what varies is the
+      // lifecycle state the routing rules are being tested against.
+      approvalStatus: "APPROVED",
+      status,
       database: {
         create: {
           databaseName,
@@ -179,10 +185,10 @@ async function createFixture(
         },
       },
     },
-    select: { id: true, subdomain: true },
+    select: { id: true, slug: true },
   });
 
-  return { id: tenant.id, subdomain: tenant.subdomain! };
+  return { id: tenant.id, subdomain: tenant.slug };
 }
 
 main().catch((error: unknown) => {

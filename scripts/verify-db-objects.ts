@@ -46,7 +46,8 @@ const MUST_BE_PARTIAL = new Set([
 
 async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
-  if (url === undefined || url === "") throw new Error("DATABASE_URL is not set.");
+  if (url === undefined || url === "")
+    throw new Error("DATABASE_URL is not set.");
 
   const client = new Client({ connectionString: url.replace(/\?.*$/, "") });
   await client.connect();

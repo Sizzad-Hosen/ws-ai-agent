@@ -75,6 +75,11 @@ async function main(): Promise<void> {
     .map((item) => item.plan)
     .filter((plan) => plan.isActive && plan.monthlyPrice !== null);
 
+  // The approving administrator, for `tenants.approved_by` and the audit row.
+  const actor = await prisma.adminUser.findFirstOrThrow({
+    select: { id: true },
+  });
+
   const expectedPlan = plans[0];
   if (!expectedPlan?.monthlyPrice) {
     throw new Error("No priced active plan to assign.");
@@ -88,6 +93,7 @@ async function main(): Promise<void> {
     rootDomain: root,
     appUrl: APP_URL,
     region: "North America",
+    actorId: actor.id,
   });
 
   if (!outcome.ok) {
@@ -104,21 +110,59 @@ async function main(): Promise<void> {
 
   check(/^[0-9a-f-]{36}$/.test(created.id), true, "tenant id is a uuid");
   check(created.tenantCode.startsWith("TEN-"), true, "tenant code assigned");
-  check(created.subdomain, deriveSubdomain(businessName), "subdomain assigned");
+  check(created.slug, deriveSubdomain(businessName), "subdomain assigned");
   check(
-    created.websiteUrl,
-    buildWebsiteUrl(created.subdomain ?? "", root, APP_URL),
-    "website url assigned",
+    tenant.websiteUrl,
+    buildWebsiteUrl(created.slug, root, APP_URL),
+    "website url derived from the slug",
   );
-  // A workspace whose database does not exist yet is on trial, never active.
-  check(created.approvalStatus, "TRIAL", "starts on trial");
+  // The verdict is settled; the workspace is not usable until its database is.
+  check(created.approvalStatus, "APPROVED", "approved");
+  check(created.status, "PROVISIONING", "starts provisioning");
+
+  // The owner exists, invited, and the circular pair is closed.
+  const owner = await prisma.tenantUser.findFirstOrThrow({
+    where: { tenantId: created.id },
+    select: {
+      id: true,
+      role: true,
+      status: true,
+      isOwner: true,
+      passwordHash: true,
+      inviteTokenHash: true,
+    },
+  });
+  check(owner.role, "OWNER", "owner role");
+  check(owner.status, "INVITED", "owner is invited, not active");
+  check(owner.isOwner, true, "owner flag set");
+  check(owner.passwordHash, null, "no password until the invite is accepted");
+  check(owner.inviteTokenHash !== null, true, "invite token hash stored");
+  check(created.ownerTenantUserId, owner.id, "tenant points back at its owner");
+
+  // The subscription froze the plan limits at signup. Read from the catalogue
+  // row rather than the domain Plan, which does not carry the limit columns.
+  const catalogue = await prisma.plan.findUniqueOrThrow({
+    where: { id: expectedPlan.id },
+    select: { code: true, maxAiMessages: true },
+  });
+  const created_subscription = await prisma.subscription.findFirstOrThrow({
+    where: { tenantId: created.id },
+    select: { limitsSnapshot: true },
+  });
+  const limits = created_subscription.limitsSnapshot as Record<string, unknown>;
+  check(limits.planCode, catalogue.code, "limits snapshot names the plan");
+  check(
+    limits.maxAiMessages,
+    catalogue.maxAiMessages,
+    "limits snapshot copied max_ai_messages",
+  );
 
   if (!created.database)
     throw new Error("No tenant_databases row was created.");
   check(created.database.status, "PENDING", "database awaits provisioning");
   check(
     created.database.databaseName,
-    deriveDatabaseName(created.subdomain ?? ""),
+    deriveDatabaseName(created.slug ?? ""),
     "database name",
   );
   if (created.database.secretReference === "") {
@@ -150,6 +194,7 @@ async function main(): Promise<void> {
     rootDomain: root,
     appUrl: APP_URL,
     region: "North America",
+    actorId: actor.id,
   });
   check(second.ok, false, "second approval refused");
 
@@ -160,19 +205,34 @@ async function main(): Promise<void> {
 
   // ---- routing resolves the new tenant ------------------------------------
   const routed = await repositories.tenants.findRoutingTargetBySubdomain(
-    created.subdomain ?? "",
+    created.slug ?? "",
   );
   check(routed?.tenantId, created.id, "subdomain routes to the new tenant");
   check(routed?.provisioned, false, "not servable until the database is ready");
 
   // ---- clean up ------------------------------------------------------------
-  // Subscriptions are ON DELETE RESTRICT, so they go before the tenant.
+  // Nothing in this database cascades, so every child goes before its parent.
   await prisma.subscription.deleteMany({ where: { tenantId: created.id } });
+  await prisma.tenantDatabase.deleteMany({ where: { tenantId: created.id } });
+  await prisma.adminAuditLog.deleteMany({ where: { tenantId: created.id } });
+  // The tenant points at its owner, so that link is cleared before the owner
+  // can go.
+  await prisma.tenant.update({
+    where: { id: created.id },
+    data: { ownerTenantUserId: null },
+  });
+  await prisma.tenantUser.deleteMany({ where: { tenantId: created.id } });
   await prisma.tenant.delete({ where: { id: created.id } });
+  await prisma.adminAuditLog.deleteMany({
+    where: { resourceId: queued.id },
+  });
+  await prisma.tenantRegistrationCheck.deleteMany({
+    where: { tenantRegistrationId: queued.id },
+  });
   await prisma.tenantRegistration.delete({ where: { id: queued.id } });
 
   console.log(
-    `Provisioning verified: 11 derivation cases; ${created.tenantCode} created with subdomain "${created.subdomain}", site ${created.websiteUrl ?? "(none)"}, database ${created.database.databaseName} (PENDING), ${subscription?.plan.name} plan at ${subscription?.priceSnapshot.toFixed(2)}. Double approval refused. Cleaned up.`,
+    `Provisioning verified: 11 derivation cases; ${created.tenantCode} created with slug "${created.slug}", site ${tenant.websiteUrl ?? "(none)"}, database ${created.database.databaseName} (PENDING), ${subscription?.plan.name} plan at ${subscription?.priceSnapshot.toFixed(2)}. Double approval refused. Cleaned up.`,
   );
 }
 

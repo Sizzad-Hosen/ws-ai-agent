@@ -4,10 +4,14 @@ import {
   annualSavingPercent,
   toPublicPlans,
 } from "@/features/public-site/pricing";
+import { publishedFaqs } from "@/features/public-site/faq";
 import { allChecksPassed } from "@/features/registrations/types";
 import { prisma } from "@/server/db/prisma";
 import { repositories } from "@/server/repositories";
-import { REGISTRATION_CHECK_TYPES } from "@/types/status";
+import {
+  REGISTRATION_CHECK_TYPES,
+  REVIEW_QUEUE_STATUSES,
+} from "@/types/status";
 
 async function main(): Promise<void> {
   // ---- pricing reads the live catalogue --------------------------------
@@ -70,7 +74,7 @@ async function main(): Promise<void> {
   }
 
   const page = await repositories.registrations.findMany({
-    status: "pending_review",
+    status: REVIEW_QUEUE_STATUSES,
     limit: 50,
     offset: 0,
   });
@@ -134,11 +138,13 @@ async function main(): Promise<void> {
     throw new Error("Brand name is empty; the header would render unnamed.");
   }
 
-  // ---- the FAQ page has published answers -------------------------------
-  const faqs = await repositories.faqs.findPublished();
+  // ---- the FAQ page has answers -----------------------------------------
+  // Static content since `public_faqs` left the MVP, so this checks the copy
+  // is well formed rather than that a query filters correctly.
+  const faqs = publishedFaqs();
 
   if (faqs.length === 0) {
-    throw new Error("No active FAQs; the FAQ page would be empty.");
+    throw new Error("No FAQs; the FAQ page would be empty.");
   }
 
   for (const faq of faqs) {
@@ -147,12 +153,19 @@ async function main(): Promise<void> {
     }
   }
 
-  const inactive = await prisma.publicFaq.count({ where: { isActive: false } });
-  if (faqs.length + inactive !== (await prisma.publicFaq.count())) {
-    throw new Error("The FAQ page is not filtering on is_active.");
+  if (new Set(faqs.map((faq) => faq.id)).size !== faqs.length) {
+    throw new Error("Two FAQs share an id; React keys would collide.");
   }
 
-  // Checks cascade with the registration, so the queue is left exactly as found.
+  if (publishedFaqs(2).length !== 2) {
+    throw new Error("The home page FAQ preview does not honour its limit.");
+  }
+
+  // No ON DELETE CASCADE anywhere in this database, so the checks go first.
+  // The queue is left exactly as it was found.
+  await prisma.tenantRegistrationCheck.deleteMany({
+    where: { tenantRegistrationId: created.registration.id },
+  });
   await prisma.tenantRegistration.delete({
     where: { id: created.registration.id },
   });
@@ -162,7 +175,7 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    `Public site verified: ${plans.length} plans (${custom.length} custom, annual saving ${saving}%), registration ${code} reached the review queue with 3 checks and became approvable once all three were recorded, ${faqs.length} published FAQs, brand "${settings.brand.name}". Queue restored.`,
+    `Public site verified: ${plans.length} plans (${custom.length} custom, annual saving ${saving}%), registration ${code} reached the review queue with 3 checks and became approvable once all three were recorded, ${faqs.length} FAQs, brand "${settings.brand.name}". Queue restored.`,
   );
 }
 

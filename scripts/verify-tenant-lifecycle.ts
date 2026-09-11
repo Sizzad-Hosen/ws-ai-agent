@@ -9,7 +9,10 @@ import { prisma } from "@/server/db/prisma";
 import { repositories } from "@/server/repositories";
 import { provisionDatabaseForTenant } from "@/server/services/provision-tenant-database";
 import { TENANT_SCHEMA_VERSION } from "@/server/tenancy/provision-database";
-import { REGISTRATION_CHECK_TYPES } from "@/types/status";
+import {
+  REGISTRATION_CHECK_TYPES,
+  REVIEW_QUEUE_STATUSES,
+} from "@/types/status";
 
 /**
  * The whole path a business takes: public sign-up, the review queue, approval,
@@ -52,7 +55,7 @@ async function main(): Promise<void> {
   try {
     // ---- it reaches the queue, and the tenants screen ---------------------
     const queue = await repositories.registrations.findMany({
-      status: "pending_review",
+      status: REVIEW_QUEUE_STATUSES,
       limit: 50,
     });
     const queued = queue.items.find(
@@ -97,6 +100,9 @@ async function main(): Promise<void> {
         planId: plan!.id,
         priceSnapshot: plan!.monthlyPrice!,
         currency: plan!.currency,
+        actorId: (
+          await prisma.adminUser.findFirstOrThrow({ select: { id: true } })
+        ).id,
         rootDomain: env.TENANT_ROOT_DOMAIN,
         appUrl: env.NEXT_PUBLIC_APP_URL,
         region: "US-East-1",
@@ -235,12 +241,27 @@ async function cleanUp(
   tenantId: string | null,
   databaseName: string | null,
 ): Promise<void> {
+  // Nothing in this database cascades, so every child goes before its parent
+  // and the tenant releases its owner before the owner can be removed.
   if (tenantId) {
     await prisma.invoice.deleteMany({ where: { tenantId } });
     await prisma.subscription.deleteMany({ where: { tenantId } });
+    await prisma.tenantDatabase.deleteMany({ where: { tenantId } });
+    await prisma.adminAuditLog.deleteMany({ where: { tenantId } });
+    await prisma.tenant.updateMany({
+      where: { id: tenantId },
+      data: { ownerTenantUserId: null },
+    });
+    await prisma.tenantUser.deleteMany({ where: { tenantId } });
     await prisma.tenant.deleteMany({ where: { id: tenantId } });
   }
 
+  await prisma.adminAuditLog.deleteMany({
+    where: { resourceId: registrationId },
+  });
+  await prisma.tenantRegistrationCheck.deleteMany({
+    where: { tenantRegistrationId: registrationId },
+  });
   await prisma.tenantRegistration.deleteMany({ where: { id: registrationId } });
 
   if (databaseName) {

@@ -32,7 +32,11 @@ function parseUrl(): { base: string; name: string; admin: string } {
   }
   const base = raw.replace(/\?.*$/, "");
   const name = base.slice(base.lastIndexOf("/") + 1);
-  return { base, name, admin: `${base.slice(0, base.lastIndexOf("/"))}/postgres` };
+  return {
+    base,
+    name,
+    admin: `${base.slice(0, base.lastIndexOf("/"))}/postgres`,
+  };
 }
 
 const QUERIES: ReadonlyArray<{ label: string; key: string; sql: string }> = [
@@ -88,7 +92,9 @@ const QUERIES: ReadonlyArray<{ label: string; key: string; sql: string }> = [
   },
 ];
 
-async function snapshot(client: Client): Promise<Map<string, Map<string, Row>>> {
+async function snapshot(
+  client: Client,
+): Promise<Map<string, Map<string, Row>>> {
   const out = new Map<string, Map<string, Row>>();
   for (const q of QUERIES) {
     const result = await client.query<Row>(q.sql);

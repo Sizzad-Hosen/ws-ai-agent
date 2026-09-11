@@ -18,7 +18,11 @@ function parseUrl(): { base: string; name: string; admin: string } {
   }
   const base = raw.replace(/\?.*$/, "");
   const cut = base.lastIndexOf("/");
-  return { base, name: base.slice(cut + 1), admin: `${base.slice(0, cut)}/postgres` };
+  return {
+    base,
+    name: base.slice(cut + 1),
+    admin: `${base.slice(0, cut)}/postgres`,
+  };
 }
 
 function run(command: string, args: readonly string[]): void {
@@ -28,7 +32,9 @@ function run(command: string, args: readonly string[]): void {
 async function main(): Promise<void> {
   const { name, admin } = parseUrl();
   if (!/^[A-Za-z0-9_]+$/.test(name)) {
-    throw new Error(`Refusing to reset a database with an unusual name: ${name}`);
+    throw new Error(
+      `Refusing to reset a database with an unusual name: ${name}`,
+    );
   }
 
   const client = new Client({ connectionString: admin });

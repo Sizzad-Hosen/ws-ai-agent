@@ -136,11 +136,18 @@ async function main(): Promise<void> {
   // ---- site settings ------------------------------------------------------
   const settingsBefore = await repositories.siteSettings.find();
 
-  await repositories.siteSettings.save({
-    brand: { name: "Verify Brand", primary: "#123456" },
-    contact: { supportEmail: "s@example.com", salesEmail: "x@example.com" },
-    announcement: { enabled: true, message: "Hello" },
+  const writer = await prisma.adminUser.findFirstOrThrow({
+    select: { id: true },
   });
+
+  await repositories.siteSettings.save(
+    {
+      brand: { name: "Verify Brand", primary: "#123456" },
+      contact: { supportEmail: "s@example.com", salesEmail: "x@example.com" },
+      announcement: { enabled: true, message: "Hello" },
+    },
+    writer.id,
+  );
 
   const settingsAfter = await repositories.siteSettings.find();
   if (settingsAfter.brand.name !== "Verify Brand") {
@@ -150,7 +157,7 @@ async function main(): Promise<void> {
     throw new Error("Announcement flag did not persist.");
   }
 
-  await repositories.siteSettings.save(settingsBefore);
+  await repositories.siteSettings.save(settingsBefore, writer.id);
 
   // ---- tenant lifecycle ---------------------------------------------------
   // Its own tenant, not whichever one happens to exist: suspending a real
@@ -164,23 +171,30 @@ async function main(): Promise<void> {
       ownerEmail: `${unique}@example.test`,
       ownerPhone: "+1 555 000 0000",
       industry: "Testing",
-      region: "US-East-1",
-      subdomain: unique,
-      approvalStatus: "ACTIVE",
+      businessRegion: "US-East-1",
+      slug: unique,
+      approvalStatus: "APPROVED",
+      status: "ACTIVE",
     },
     select: { id: true },
   });
 
   try {
-    await repositories.tenants.updateApprovalStatus(fixture.id, "suspended");
+    // Suspension moves the lifecycle column, never the verdict.
+    await repositories.tenants.updateStatuses(fixture.id, {
+      status: "suspended",
+    });
     const suspended = await repositories.tenants.findById(fixture.id);
-    if (suspended?.approvalStatus !== "suspended") {
+    if (suspended?.status !== "suspended") {
       throw new Error("Tenant suspend did not persist.");
     }
+    if (suspended.approvalStatus !== "approved") {
+      throw new Error("Suspending a tenant changed its approval verdict.");
+    }
 
-    await repositories.tenants.updateApprovalStatus(fixture.id, "active");
+    await repositories.tenants.updateStatuses(fixture.id, { status: "active" });
     const restored = await repositories.tenants.findById(fixture.id);
-    if (restored?.approvalStatus !== "active") {
+    if (restored?.status !== "active") {
       throw new Error("Tenant reactivate did not persist.");
     }
   } finally {
