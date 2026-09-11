@@ -18,6 +18,7 @@ export const RESERVED_TENANT_SLUGS: ReadonlySet<string> = new Set([
   "api",
   "bo",
   "demo",
+  "faq",
   "how-it-works",
   "pricing",
   "register",

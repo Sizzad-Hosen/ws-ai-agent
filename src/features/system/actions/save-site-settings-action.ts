@@ -43,7 +43,7 @@ export async function saveSiteSettingsAction(
   }
 
   try {
-    await repositories.siteSettings.save(parsed.data);
+    await repositories.siteSettings.save(parsed.data, actor.id);
   } catch (error: unknown) {
     console.error("Unable to save the site settings.", error);
     return {
@@ -56,7 +56,7 @@ export async function saveSiteSettingsAction(
     actor,
     action: AUDIT_ACTIONS.SITE_SETTINGS_UPDATE,
     entityType: "settings",
-    entityId: "public_site_settings",
+    entityId: "site_settings",
     metadata: {
       brandName: parsed.data.brand.name,
       supportEmail: parsed.data.contact.supportEmail,

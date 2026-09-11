@@ -1,9 +1,12 @@
 /**
  * Feature flags and platform settings.
  *
- * `platform_settings` also holds the brand name. It moved here when
- * `public_site_settings` left the MVP, so there is still one place to change
- * the product name.
+ * `platform_settings` also holds the public site settings. They moved here
+ * when `public_site_settings` left the MVP, grouped under `site.*` keys so
+ * each group is read and written atomically — the shape
+ * `PrismaSiteSettingsRepository` expects. Editing them in the back office is
+ * what changes the public site, so there is one place to change the product
+ * name.
  */
 import { prisma } from "./client";
 
@@ -17,7 +20,8 @@ const FEATURE_FLAGS = [
   },
   {
     key: "ai_streaming_replies",
-    description: "Streams AI replies token by token instead of sending one message.",
+    description:
+      "Streams AI replies token by token instead of sending one message.",
     defaultValue: true,
     rolloutPercent: 100,
   },
@@ -31,15 +35,23 @@ const FEATURE_FLAGS = [
 
 const SETTINGS = [
   {
-    key: "brand.name",
-    value: "Ordivex",
-    description:
-      "Product name shown in the public header, the back office and page titles.",
+    key: "site.brand",
+    value: { name: "Ordivex", primary: "#10B981" },
+    description: "Platform name and accent colour for the public site.",
   },
   {
-    key: "brand.support_email",
-    value: "support@ordivex.com",
-    description: "Reply-to address on every outbound platform email.",
+    key: "site.contact",
+    value: {
+      supportEmail: "support@ordivex.com",
+      salesEmail: "sales@ordivex.com",
+    },
+    description: "Support and sales addresses shown to the public.",
+  },
+  {
+    key: "site.announcement",
+    value: { enabled: false, message: "" },
+    description:
+      "Site-wide banner above the public header, and whether it shows.",
   },
   {
     key: "billing.currency",
@@ -65,7 +77,20 @@ const SETTINGS = [
   },
 ] as const;
 
-export async function seedPlatform(): Promise<void> {
+/**
+ * Keys an earlier seed wrote that `SETTINGS` has replaced.
+ *
+ * Removed by name rather than by "delete anything unmanaged", so a key an
+ * operator added by hand survives the seed.
+ */
+const SUPERSEDED_KEYS = ["brand.name", "brand.support_email"];
+
+export interface PlatformSeedCounts {
+  readonly flags: number;
+  readonly settings: number;
+}
+
+export async function seedPlatform(): Promise<PlatformSeedCounts> {
   for (const flag of FEATURE_FLAGS) {
     const fields = {
       description: flag.description,
@@ -88,4 +113,10 @@ export async function seedPlatform(): Promise<void> {
       create: { key: setting.key, ...fields },
     });
   }
+
+  await prisma.platformSetting.deleteMany({
+    where: { key: { in: SUPERSEDED_KEYS } },
+  });
+
+  return { flags: FEATURE_FLAGS.length, settings: SETTINGS.length };
 }

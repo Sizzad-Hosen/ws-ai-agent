@@ -9,7 +9,7 @@ interface FaqListProps {
 /**
  * Native `<details>` rather than a scripted accordion.
  *
- * The rows are static content from `public_faqs`, so disclosure needs no state.
+ * The rows are static content, so disclosure needs no state.
  * That keeps this a server component, and keeps every answer reachable by
  * in-page search, print and crawlers when JavaScript has not loaded.
  */

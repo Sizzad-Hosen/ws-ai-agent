@@ -26,7 +26,7 @@ async function main(): Promise<void> {
   const admin = await seedAdmin();
   const plans = await seedPlans();
   await seedAi();
-  await seedPlatform();
+  const platform = await seedPlatform();
 
   const business = plans["business"];
   const starter = plans["starter"];
@@ -37,10 +37,13 @@ async function main(): Promise<void> {
   await seedTenant(business, admin.id);
   await seedRegistration(starter);
 
+  // Counted rather than quoted, so the summary cannot drift from the seed.
   console.info(
-    "Seed complete: 1 administrator, 3 plans, 3 AI providers, 3 feature flags, " +
-      "6 platform settings, 1 approved tenant with a database, owner and active " +
-      "subscription, and 1 submitted registration with 3 pending checks.",
+    `Seed complete: 1 administrator, ${Object.keys(plans).length} plans, ` +
+      `3 AI providers, ${platform.flags} feature flags, ` +
+      `${platform.settings} platform settings, 1 approved tenant with a ` +
+      "database, owner and active subscription, and 1 submitted registration " +
+      "with 3 pending checks.",
   );
 }
 

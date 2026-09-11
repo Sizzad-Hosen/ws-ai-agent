@@ -3,7 +3,6 @@ import "server-only";
 import type { ActivityRepository } from "./contracts/activity-repository";
 import type { AdminRepository } from "./contracts/admin-repository";
 import type { AiConfigurationRepository } from "./contracts/ai-configuration-repository";
-import type { FaqRepository } from "./contracts/faq-repository";
 import type { MessageRepository } from "./contracts/message-repository";
 import type { PlanRepository } from "./contracts/plan-repository";
 import type { ProvisioningRepository } from "./contracts/provisioning-repository";
@@ -16,7 +15,6 @@ import type { UsageRepository } from "./contracts/usage-repository";
 import type { WhatsappRepository } from "./contracts/whatsapp-repository";
 import { PrismaAdminRepository } from "./prisma/prisma-admin-repository";
 import { PrismaAiConfigurationRepository } from "./prisma/prisma-ai-configuration-repository";
-import { PrismaFaqRepository } from "./prisma/prisma-faq-repository";
 import { PrismaPlanRepository } from "./prisma/prisma-plan-repository";
 import { PrismaProvisioningRepository } from "./prisma/prisma-provisioning-repository";
 import { PrismaRegistrationRepository } from "./prisma/prisma-registration-repository";
@@ -35,7 +33,6 @@ import {
 export interface Repositories {
   readonly admins: AdminRepository;
   readonly aiConfiguration: AiConfigurationRepository;
-  readonly faqs: FaqRepository;
   readonly plans: PlanRepository;
   readonly provisioning: ProvisioningRepository;
   readonly registrations: RegistrationRepository;
@@ -63,7 +60,6 @@ export interface Repositories {
 export const repositories: Repositories = {
   admins: new PrismaAdminRepository(),
   aiConfiguration: new PrismaAiConfigurationRepository(),
-  faqs: new PrismaFaqRepository(),
   plans: new PrismaPlanRepository(),
   provisioning: new PrismaProvisioningRepository(),
   registrations: new PrismaRegistrationRepository(),

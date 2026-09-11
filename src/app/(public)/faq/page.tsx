@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ROUTES } from "@/constants/routes";
 import { FaqList } from "@/features/public-site/components/faq-list";
 import { PsButton, PsSection } from "@/features/public-site/components/ui";
-import { repositories } from "@/server/repositories";
+import { publishedFaqs } from "@/features/public-site/faq";
 
 export const metadata: Metadata = {
   title: "FAQ",
@@ -12,10 +12,10 @@ export const metadata: Metadata = {
     "Answers on WhatsApp Business API access, setup time, human handoff, message limits and where your data is stored.",
 };
 
-export default async function FaqPage() {
-  // Read from `public_faqs` rather than a constant in this file, so an answer
-  // is editable content — the treatment the pricing page gives the catalogue.
-  const faqs = await repositories.faqs.findPublished();
+export default function FaqPage() {
+  // Static copy: `public_faqs` left the MVP. Unlike the plan catalogue, these
+  // answers change on the same cadence as the page around them.
+  const faqs = publishedFaqs();
 
   return (
     <>
@@ -31,13 +31,7 @@ export default async function FaqPage() {
         </div>
 
         <div className="mt-14">
-          {faqs.length === 0 ? (
-            <p className="text-ps-ink-muted border-ps-edge rounded-card mx-auto max-w-3xl border border-dashed px-6 py-16 text-center">
-              Our answers are being updated. Please check back shortly.
-            </p>
-          ) : (
-            <FaqList faqs={faqs} />
-          )}
+          <FaqList faqs={faqs} />
         </div>
       </PsSection>
 
