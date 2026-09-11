@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated Prisma client for tenant databases. Rebuilt by db:generate,
+    // so lint findings here can never be acted on.
+    "src/generated/**",
   ]),
 ]);
 

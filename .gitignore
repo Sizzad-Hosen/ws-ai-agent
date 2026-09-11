@@ -37,6 +37,9 @@ yarn-error.log*
 # local Prisma development database state
 .prisma/
 
+# generated Prisma client for tenant databases (npm run db:generate rebuilds it)
+/src/generated/
+
 # vercel
 .vercel
 
