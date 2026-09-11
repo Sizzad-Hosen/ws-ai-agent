@@ -13,6 +13,7 @@ import { ReviewChecklist } from "@/features/registrations/components/review-chec
 import { allChecksPassed } from "@/features/registrations/types";
 import { hasPermission, requirePermission } from "@/server/auth/authorization";
 import { repositories } from "@/server/repositories";
+import { isAwaitingReview } from "@/types/status";
 import { formatOptionalDate } from "@/utils/format";
 
 export const metadata: Metadata = {
@@ -68,7 +69,7 @@ export default async function RegistrationReviewPage({
           </span>
         }
         actions={
-          canManage && registration.status === "pending_review" ? (
+          canManage && isAwaitingReview(registration.status) ? (
             <RegistrationDecision
               registrationId={registration.id}
               businessName={registration.businessName}
@@ -162,7 +163,7 @@ export default async function RegistrationReviewPage({
               registrationId={registration.id}
               checks={checks}
               canManage={canManage}
-              isOpen={registration.status === "pending_review"}
+              isOpen={isAwaitingReview(registration.status)}
             />
           </CardBody>
         </Card>

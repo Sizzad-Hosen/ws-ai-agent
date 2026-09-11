@@ -10,7 +10,11 @@ import { allChecksPassed } from "@/features/registrations/types";
 import { AUDIT_ACTIONS, recordAudit } from "@/server/audit/audit-log";
 import { requirePermission } from "@/server/auth/authorization";
 import { repositories } from "@/server/repositories";
+import { isAwaitingReview } from "@/types/status";
 import { provisionDatabaseForTenant } from "@/server/services/provision-tenant-database";
+
+/** Used when a registration states no region. */
+const DEFAULT_REGION = "unspecified";
 
 export interface RegistrationDecisionResult {
   readonly success: boolean;
@@ -29,22 +33,41 @@ export interface RegistrationDecisionResult {
   };
 }
 
-const inputSchema = z.object({
-  registrationId: z.uuid("Unknown registration."),
-  decision: z.enum(["approve", "reject"]),
-});
+const inputSchema = z
+  .object({
+    registrationId: z.uuid("Unknown registration."),
+    decision: z.enum(["approve", "reject"]),
+    // Optional on the schema, required for a rejection by the refinement
+    // below. `tenant_registrations.rejection_reason` is nullable because an
+    // approval legitimately has none.
+    reason: z.string().trim().max(1000).optional(),
+  })
+  .strict()
+  .refine(
+    (value) => value.decision !== "reject" || (value.reason ?? "") !== "",
+    {
+      // Enforced here, not only by disabling the button: a rejection nobody
+      // can explain is the one the applicant will ask about.
+      message: "Give a reason for the rejection.",
+      path: ["reason"],
+    },
+  );
 
 /**
  * Approves or rejects a registration.
  *
  * Approval provisions in two stages, because they cannot share a transaction.
- * First the master records — tenant, database row, subscription — commit
- * together or not at all: a tenant missing either is not half-finished, it is
- * broken. Then the physical database is created and the row moves to READY or
- * FAILED, since `CREATE DATABASE` cannot run inside a transaction.
+ * First the master records — tenant, invited owner, database row, subscription
+ * and the audit entry — commit together or not at all: a tenant missing any of
+ * them is not half-finished, it is broken. Then the physical database is
+ * created and the row moves to READY or FAILED, since `CREATE DATABASE` cannot
+ * run inside a transaction.
  *
- * The tenant starts on TRIAL because its subscription genuinely is trialing,
- * not because the workspace is incomplete.
+ * The tenant is approved and PROVISIONING, not active: the verdict is settled
+ * but the workspace is not usable until its database exists.
+ *
+ * Rejection creates nothing at all — no tenant, no owner, no database — and
+ * records the reason it was refused.
  */
 export async function decideRegistrationAction(
   input: unknown,
@@ -57,7 +80,7 @@ export async function decideRegistrationAction(
     return { success: false, message: "That request was not understood." };
   }
 
-  const { registrationId, decision } = parsed.data;
+  const { registrationId, decision, reason } = parsed.data;
   const detail =
     await repositories.registrations.findDetailById(registrationId);
 
@@ -65,7 +88,7 @@ export async function decideRegistrationAction(
     return { success: false, message: "That registration no longer exists." };
   }
 
-  if (detail.registration.status !== "pending_review") {
+  if (!isAwaitingReview(detail.registration.status)) {
     return {
       success: false,
       message: `${detail.registration.businessName} has already been reviewed.`,
@@ -73,8 +96,12 @@ export async function decideRegistrationAction(
   }
 
   if (decision === "reject") {
-    const rejected =
-      await repositories.provisioning.rejectRegistration(registrationId);
+    const rejected = await repositories.provisioning.rejectRegistration({
+      registrationId,
+      // Non-null by the schema refinement above.
+      reason: reason ?? "",
+      actorId: actor.id,
+    });
 
     if (!rejected) {
       return {
@@ -83,16 +110,8 @@ export async function decideRegistrationAction(
       };
     }
 
-    await recordAudit({
-      actor,
-      action: AUDIT_ACTIONS.REGISTRATION_REJECT,
-      entityType: "registration",
-      entityId: registrationId,
-      metadata: {
-        businessName: detail.registration.businessName,
-        registrationCode: detail.registration.registrationCode,
-      },
-    });
+    // The audit row is written inside `rejectRegistration`, in the same
+    // transaction as the verdict.
 
     revalidateReviewSurfaces(registrationId);
 
@@ -128,7 +147,10 @@ export async function decideRegistrationAction(
     currency: plan.currency,
     rootDomain: env.TENANT_ROOT_DOMAIN,
     appUrl: env.NEXT_PUBLIC_APP_URL,
-    region: detail.registration.region,
+    // `tenant_registrations.region` is nullable; the database row needs a
+    // value, so an unstated region falls back to the platform default.
+    region: detail.registration.region ?? DEFAULT_REGION,
+    actorId: actor.id,
   });
 
   if (!outcome.ok) {
@@ -144,22 +166,17 @@ export async function decideRegistrationAction(
   // marked FAILED, which the tenant detail screen surfaces and a retry fixes.
   const database = await provisionDatabaseForTenant(outcome.tenant.tenantId);
 
-  // Everything the approval created, so the trail explains the new tenant.
+  // The approval's own audit row was written inside the provisioning
+  // transaction. This one records only what happened after it committed,
+  // which the transaction could not know.
   await recordAudit({
     actor,
     action: AUDIT_ACTIONS.REGISTRATION_APPROVE,
-    entityType: "registration",
-    entityId: registrationId,
+    entityType: "tenant",
+    entityId: outcome.tenant.tenantId,
+    tenantId: outcome.tenant.tenantId,
     metadata: {
-      businessName: detail.registration.businessName,
-      registrationCode: detail.registration.registrationCode,
-      tenantId: outcome.tenant.tenantId,
-      tenantCode: outcome.tenant.tenantCode,
-      subdomain: outcome.tenant.subdomain,
       databaseName: outcome.tenant.databaseName,
-      planName: plan.name,
-      priceSnapshot: plan.monthlyPrice,
-      currency: plan.currency,
       databaseReady: database.ok,
     },
   });

@@ -11,15 +11,21 @@ export interface ProvisionInput {
   readonly appUrl: string;
   /** Region recorded on the tenant's database row. */
   readonly region: string;
+  /** The approving administrator: `tenants.approved_by` and the audit actor. */
+  readonly actorId: string;
 }
 
 export interface ProvisionedTenant {
   readonly tenantId: string;
   readonly tenantCode: string;
+  /** `tenants.slug`. */
   readonly subdomain: string;
+  /** Derived from the slug, not stored. */
   readonly websiteUrl: string | null;
   readonly databaseName: string;
   readonly subscriptionId: string;
+  /** The invited owner created alongside the tenant. */
+  readonly ownerTenantUserId: string;
 }
 
 export type ProvisionOutcome =
@@ -37,16 +43,23 @@ export type ProvisionFailure =
 
 export interface ProvisioningRepository {
   /**
-   * Turns an approved registration into a tenant, its database record and its
-   * subscription, and marks the registration approved — all or nothing.
+   * Turns an approved registration into a tenant, its database record, its
+   * invited owner and its subscription, marks the registration approved and
+   * writes the audit entry — all or nothing.
    *
-   * A tenant without a database row or without a subscription is not a
+   * A tenant without a database row, an owner or a subscription is not a
    * half-finished tenant, it is a broken one, so the whole set commits together
-   * or not at all.
+   * or not at all. The audit row is inside the same transaction for the same
+   * reason: an approval nobody can trace is not an approval.
    */
   provisionApprovedTenant(input: ProvisionInput): Promise<ProvisionOutcome>;
-  /** Marks a pending registration rejected. Returns false if it was not pending. */
-  rejectRegistration(registrationId: string): Promise<boolean>;
+  /**
+   * Marks a pending registration rejected, recording why.
+   *
+   * Creates nothing: no tenant, no owner, no database. Returns false if the
+   * registration was not awaiting review.
+   */
+  rejectRegistration(input: RejectInput): Promise<boolean>;
   /**
    * Records where a tenant's physical database got to.
    *
@@ -64,6 +77,13 @@ export interface ProvisioningRepository {
   ): Promise<void>;
   /** The database row for a tenant, for a retry after a failed provision. */
   findDatabaseTarget(tenantId: string): Promise<DatabaseTarget | null>;
+}
+
+export interface RejectInput {
+  readonly registrationId: string;
+  /** Stored in `tenant_registrations.rejection_reason`. Never blank. */
+  readonly reason: string;
+  readonly actorId: string;
 }
 
 export interface DatabaseTarget {

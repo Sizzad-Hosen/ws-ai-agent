@@ -26,6 +26,8 @@ export function RegistrationDecision({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<RegistrationDecisionResult | null>(null);
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
 
   function decide(decision: "approve" | "reject"): void {
     setResult(null);
@@ -34,6 +36,7 @@ export function RegistrationDecision({
       const outcome = await decideRegistrationAction({
         registrationId,
         decision,
+        ...(decision === "reject" ? { reason: reason.trim() } : {}),
       });
 
       setResult(outcome);
@@ -42,19 +45,53 @@ export function RegistrationDecision({
     });
   }
 
+  // Rejecting asks for the reason first. The server rejects a blank one too,
+  // so this is the courtesy and not the control.
+  function onReject(): void {
+    if (!rejecting) {
+      setRejecting(true);
+      return;
+    }
+
+    if (reason.trim() === "") return;
+
+    decide("reject");
+  }
+
   const provisioned = result?.provisioned;
 
   return (
     <div className="flex flex-col items-end gap-3">
+      {rejecting ? (
+        <div className="w-full max-w-md text-left">
+          <label
+            htmlFor="rejection-reason"
+            className="text-foreground block text-sm font-medium"
+          >
+            Why is {businessName} being rejected?
+          </label>
+          <textarea
+            id="rejection-reason"
+            rows={3}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            maxLength={1000}
+            required
+            className="border-input mt-1.5 w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+            placeholder="Recorded against the application, and quoted to the applicant."
+          />
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-2">
         <Button
           variant="danger"
-          disabled={isPending}
-          onClick={() => decide("reject")}
+          disabled={isPending || (rejecting && reason.trim() === "")}
+          onClick={onReject}
           aria-label={`Reject ${businessName}`}
         >
           <Ban className="size-4" aria-hidden="true" />
-          Reject
+          {rejecting ? "Confirm rejection" : "Reject"}
         </Button>
         <Button
           disabled={isPending || !readyToApprove}
