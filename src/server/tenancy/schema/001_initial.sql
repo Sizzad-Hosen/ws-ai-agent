@@ -5,7 +5,7 @@
 -- The tenant database schema, applied by
 -- src/server/tenancy/provision-database.ts when an approved registration
 -- becomes a tenant. Source of truth for the shape is
--- docs/db/SaaS Tenant DB — Business + Storefront + AI + WhatsApp.png,
+-- docs/db/Orvidex — TENANT DB (one per tenant).png,
 -- transcribed into prisma/tenant/schema.prisma.
 
 -- CreateEnum

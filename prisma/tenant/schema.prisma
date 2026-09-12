@@ -1,7 +1,7 @@
 // Tenant database — one per tenant.
 //
-// Source of truth: docs/db/SaaS Tenant DB — Business + Storefront + AI +
-// WhatsApp.png. Separate from prisma/schema.prisma on purpose: that models the
+// Source of truth: docs/db/Orvidex — TENANT DB (one per tenant).png.
+// Separate from prisma/schema.prisma on purpose: that models the
 // master database, this models what every tenant gets its own copy of. They
 // are different databases with different lifecycles, so they get different
 // clients — a single client typed against both would let a query for a tenant's

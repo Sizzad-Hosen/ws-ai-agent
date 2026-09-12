@@ -23,7 +23,7 @@ environment values are parsed at the server boundary with Zod.
 Two ERDs, two schemas. `docs/db/Ordivex Master DB Design.png` is the
 platform's own database — administrators, tenants, plans, registrations,
 public-site content — and is implemented in `prisma/schema.prisma`.
-`docs/db/SaaS Tenant DB — Business + Storefront + AI + WhatsApp.png` is what
+`docs/db/Orvidex — TENANT DB (one per tenant).png` is what
 each tenant gets its own copy of, implemented in
 `src/server/tenancy/schema/`. Operational tenant data belongs in the second and
 must never be introduced into the first.
@@ -90,7 +90,7 @@ URL is the path form whenever `NEXT_PUBLIC_APP_URL` is set.
 5. The tenant's storefront is live at `/<slug>`.
 
 The tenant schema lives in `src/server/tenancy/schema/`, transcribed from
-`docs/db/SaaS Tenant DB — Business + Storefront + AI + WhatsApp.png` the same
+`docs/db/Orvidex — TENANT DB (one per tenant).png` the same
 way `prisma/schema.prisma` is transcribed from the master ERD: 25 tables
 covering tenant staff and RBAC, the catalogue and inventory, carts, orders,
 payments and reviews, WhatsApp accounts, contacts, conversations and messages,
