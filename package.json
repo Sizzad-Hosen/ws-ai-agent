@@ -37,7 +37,8 @@
     "verify:ai-usage": "node --conditions=react-server --import tsx scripts/verify-ai-usage.ts",
     "verify:tenant-pages": "node --conditions=react-server --import tsx scripts/verify-tenant-pages.ts",
     "verify:catalogue": "node --conditions=react-server --import tsx scripts/verify-catalogue.ts",
-    "whatsapp:simulate": "node --import tsx scripts/simulate-webhook.ts"
+    "whatsapp:simulate": "node --import tsx scripts/simulate-webhook.ts",
+    "verify:onboarding": "node --conditions=react-server --import tsx scripts/verify-onboarding.ts"
   },
   "prisma": {
     "seed": "node --conditions=react-server --import tsx prisma/seed.ts"

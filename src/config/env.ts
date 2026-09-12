@@ -75,6 +75,14 @@ const serverEnvSchema = z.object({
   META_CONFIG_ID: z.string().trim().default(""),
   /** Graph API version, e.g. v21.0. */
   META_GRAPH_VERSION: z.string().trim().default("v21.0"),
+  /**
+   * 32 bytes, base64, encrypting the access tokens held on tenants behalf.
+   *
+   * Empty is allowed so a checkout without it still boots; the connect flow
+   * then refuses with a clear message rather than storing a token in the
+   * clear. Losing this key makes every stored token unreadable.
+   */
+  WHATSAPP_TOKEN_ENCRYPTION_KEY: z.string().trim().default(""),
 });
 
 export const env = serverEnvSchema.parse({
@@ -96,4 +104,5 @@ export const env = serverEnvSchema.parse({
   META_WEBHOOK_VERIFY_TOKEN: process.env.META_WEBHOOK_VERIFY_TOKEN,
   META_CONFIG_ID: process.env.META_CONFIG_ID,
   META_GRAPH_VERSION: process.env.META_GRAPH_VERSION,
+  WHATSAPP_TOKEN_ENCRYPTION_KEY: process.env.WHATSAPP_TOKEN_ENCRYPTION_KEY,
 });

@@ -347,7 +347,7 @@ CREATE TABLE whatsapp_accounts (
     display_phone_number varchar(40),
     verified_name        varchar(180),
     business_name        varchar(180),
-    token_reference      text,
+    access_token_encrypted text,
     token_expires_at     timestamptz(6),
     webhook_verify_token varchar(190),
     app_secret_reference text,

@@ -22,6 +22,8 @@ import {
   viewFor,
   type ConnectionState,
 } from "@/features/tenant-whatsapp/connection";
+import { ConnectButton } from "@/features/tenant-whatsapp/components/connect-button";
+import { ConnectionPoller } from "@/features/tenant-whatsapp/components/connection-poller";
 import { loadTenantWhatsapp } from "@/features/tenant-whatsapp/whatsapp-service";
 import { requireTenantPage } from "@/server/tenancy/tenant-guard";
 import {
@@ -74,6 +76,8 @@ export default async function TenantWhatsappPage({
 
       {screen === "failed" ? (
         <FailedState
+          slug={tenant.slug}
+          platformConfigured={platformConfigured}
           errorCode={
             view.lastAttempt?.errorCode ?? view.connection?.lastError ?? null
           }
@@ -83,6 +87,7 @@ export default async function TenantWhatsappPage({
 
       {screen === "not-connected" ? (
         <NotConnectedState
+          slug={tenant.slug}
           platformConfigured={platformConfigured}
           previouslyDisconnected={state === "DISCONNECTED"}
         />
@@ -214,6 +219,8 @@ function ConnectingState({ state }: { readonly state: ConnectionState }) {
 
   return (
     <Card>
+      {/* Advances the step list as the server-side flow progresses. */}
+      <ConnectionPoller />
       <CardHeader
         title="Connecting your number"
         description="This takes a few seconds. Leave the page open."
@@ -277,9 +284,13 @@ function ConnectingState({ state }: { readonly state: ConnectionState }) {
 /* ---------------------------------------------------------------- failed */
 
 function FailedState({
+  slug,
+  platformConfigured,
   errorCode,
   errorMessage,
 }: {
+  readonly slug: string;
+  readonly platformConfigured: boolean;
   readonly errorCode: string | null;
   readonly errorMessage: string | null;
 }) {
@@ -306,9 +317,16 @@ function FailedState({
           </div>
         </div>
 
-        <Button disabled title="The connect flow is not implemented yet.">
-          Try again
-        </Button>
+        <ConnectButton
+          slug={slug}
+          label="Try again"
+          disabled={!platformConfigured}
+          disabledReason={
+            platformConfigured
+              ? undefined
+              : "The platform has not finished setting up its Meta app."
+          }
+        />
       </CardBody>
     </Card>
   );
@@ -317,9 +335,11 @@ function FailedState({
 /* --------------------------------------------------------- not connected */
 
 function NotConnectedState({
+  slug,
   platformConfigured,
   previouslyDisconnected,
 }: {
+  readonly slug: string;
   readonly platformConfigured: boolean;
   readonly previouslyDisconnected: boolean;
 }) {
@@ -347,23 +367,16 @@ function NotConnectedState({
             </p>
           </div>
 
-          <Button
-            disabled
-            title={
+          <ConnectButton
+            slug={slug}
+            label={previouslyDisconnected ? "Reconnect" : "Connect WhatsApp"}
+            disabled={!platformConfigured}
+            disabledReason={
               platformConfigured
-                ? "The connect flow is not implemented yet."
-                : "The platform has not finished its Meta app setup."
+                ? undefined
+                : "Connecting is unavailable until the platform operator finishes setting up its Meta app."
             }
-          >
-            {previouslyDisconnected ? "Reconnect" : "Connect WhatsApp"}
-          </Button>
-
-          {!platformConfigured ? (
-            <p className="text-muted-foreground text-xs">
-              Connecting is unavailable until the platform operator finishes
-              setting up its Meta app.
-            </p>
-          ) : null}
+          />
         </CardBody>
       </Card>
 

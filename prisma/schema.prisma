@@ -644,7 +644,10 @@ model WhatsappAccount {
   /// The name Meta approved for the number, which is what a customer sees.
   verifiedName       String?               @map("verified_name") @db.VarChar(180)
   businessName       String?               @map("business_name") @db.VarChar(180)
-  tokenReference     String?               @map("token_reference")
+  /// An AES-256-GCM envelope, not a pointer: this deployment has no secret
+  /// manager, and a column named *_reference that holds a secret is one
+  /// somebody later logs believing it is only an identifier.
+  accessTokenEncrypted String?             @map("access_token_encrypted")
   tokenExpiresAt     DateTime?             @map("token_expires_at") @db.Timestamptz(6)
   webhookVerifyToken String?               @map("webhook_verify_token") @db.VarChar(190)
   appSecretReference String?               @map("app_secret_reference")
