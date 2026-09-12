@@ -56,6 +56,25 @@ const serverEnvSchema = z.object({
     .trim()
     .toLowerCase()
     .default("registrations@ordivex.local"),
+  /**
+   * The one Meta app this platform is registered as a Tech Provider with.
+   *
+   * There is exactly one app id, one app secret and one verify token for every
+   * tenant. A tenant is connected by subscribing this app to their WABA, not
+   * by giving them a webhook of their own.
+   *
+   * All three default to empty rather than being required, so a checkout with
+   * no Meta app still boots: the webhook answers 503 on the GET handshake and
+   * records deliveries as unverified rather than crashing at import time.
+   * Nothing here may ever reach the browser.
+   */
+  META_APP_ID: z.string().trim().default(""),
+  META_APP_SECRET: z.string().trim().default(""),
+  META_WEBHOOK_VERIFY_TOKEN: z.string().trim().default(""),
+  /** The Embedded Signup configuration id. Public by design, unlike the rest. */
+  META_CONFIG_ID: z.string().trim().default(""),
+  /** Graph API version, e.g. v21.0. */
+  META_GRAPH_VERSION: z.string().trim().default("v21.0"),
 });
 
 export const env = serverEnvSchema.parse({
@@ -72,4 +91,9 @@ export const env = serverEnvSchema.parse({
   SMTP_PASSWORD: process.env.SMTP_PASSWORD,
   EMAIL_FROM: process.env.EMAIL_FROM,
   EMAIL_REVIEW_INBOX: process.env.EMAIL_REVIEW_INBOX,
+  META_APP_ID: process.env.META_APP_ID,
+  META_APP_SECRET: process.env.META_APP_SECRET,
+  META_WEBHOOK_VERIFY_TOKEN: process.env.META_WEBHOOK_VERIFY_TOKEN,
+  META_CONFIG_ID: process.env.META_CONFIG_ID,
+  META_GRAPH_VERSION: process.env.META_GRAPH_VERSION,
 });

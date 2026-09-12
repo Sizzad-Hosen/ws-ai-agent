@@ -23,6 +23,7 @@ export const TENANT_NAVIGATION_ENTRIES: readonly TenantNavigationEntry[] = [
   { label: "Products", segment: "products" },
   { label: "Categories", segment: "categories" },
   { label: "Orders", segment: "orders" },
+  { label: "WhatsApp", segment: "whatsapp" },
   { label: "AI Usage", segment: "ai-usage" },
   { label: "Settings", segment: "settings" },
 ];

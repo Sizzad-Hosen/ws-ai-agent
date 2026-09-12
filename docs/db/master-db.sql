@@ -52,7 +52,13 @@ CREATE TYPE subscription_status AS ENUM ('trialing', 'active', 'past_due', 'canc
 CREATE TYPE invoice_status AS ENUM ('draft', 'open', 'paid', 'void', 'uncollectible');
 CREATE TYPE payment_status AS ENUM ('pending', 'succeeded', 'failed', 'refunded');
 
-CREATE TYPE whatsapp_account_status AS ENUM ('pending', 'connected', 'disconnected', 'suspended');
+-- The connection state machine. Each step of the Tech Provider flow fails
+-- separately, so each is its own state: a finished Embedded Signup popup is not
+-- a connected tenant.
+CREATE TYPE whatsapp_account_status AS ENUM (
+    'pending', 'connecting', 'token_exchanged', 'registered',
+    'subscribed', 'verified', 'live', 'failed', 'disconnected');
+CREATE TYPE whatsapp_onboarding_status AS ENUM ('started', 'completed', 'failed', 'expired');
 CREATE TYPE whatsapp_template_status AS ENUM ('draft', 'pending', 'approved', 'rejected', 'disabled');
 CREATE TYPE whatsapp_template_category AS ENUM ('marketing', 'utility', 'authentication');
 CREATE TYPE webhook_event_status AS ENUM ('unrouted', 'routed', 'processed', 'failed');
@@ -339,6 +345,7 @@ CREATE TABLE whatsapp_accounts (
     phone_number_id      varchar(150) NOT NULL,
     waba_id              varchar(150) NOT NULL,
     display_phone_number varchar(40),
+    verified_name        varchar(180),
     business_name        varchar(180),
     token_reference      text,
     token_expires_at     timestamptz(6),
@@ -346,10 +353,33 @@ CREATE TABLE whatsapp_accounts (
     app_secret_reference text,
     status               whatsapp_account_status NOT NULL DEFAULT 'pending', -- INFERRED
     quality_rating       varchar(30),                                        -- INFERRED
-    messaging_limit_tier varchar(30),                                        -- INFERRED
+    messaging_limit      varchar(30),                                        -- INFERRED
     provider             varchar(30),                                        -- INFERRED
+    subscribed_at        timestamptz(6),
+    last_webhook_at      timestamptz(6),
+    last_error           text,
     created_at           timestamptz(6) NOT NULL DEFAULT now(),              -- INFERRED
     updated_at           timestamptz(6) NOT NULL DEFAULT now()               -- INFERRED
+);
+
+-- One attempt at connecting a tenant through Embedded Signup. `state_nonce`
+-- ties the code the browser posts back to the tenant that started the flow;
+-- `waba_id` and `phone_number_id` are recorded as the popup reported them and
+-- verified against the Graph API before whatsapp_accounts is written.
+CREATE TABLE whatsapp_onboarding_sessions (
+    id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id           uuid NOT NULL REFERENCES tenants (id) ON DELETE RESTRICT,
+    state_nonce         varchar(190) NOT NULL,
+    status              whatsapp_onboarding_status NOT NULL DEFAULT 'started',
+    waba_id             varchar(150),
+    phone_number_id     varchar(150),
+    error_code          varchar(60),
+    error_message       text,
+    expires_at          timestamptz(6) NOT NULL,
+    consumed_at         timestamptz(6),
+    whatsapp_account_id uuid REFERENCES whatsapp_accounts (id) ON DELETE RESTRICT,
+    created_at          timestamptz(6) NOT NULL DEFAULT now(),
+    updated_at          timestamptz(6) NOT NULL DEFAULT now()
 );
 
 CREATE TABLE whatsapp_templates (
@@ -375,8 +405,13 @@ CREATE TABLE webhook_events (
     provider_event_id   varchar(190),
     event_type          varchar(100) NOT NULL,
     payload             jsonb NOT NULL,
+    -- SHA-256 over one event's stable identity. NOT NULL and fully unique, so a
+    -- redelivery is refused by the database rather than by a read-then-write.
+    dedupe_hash         char(64) NOT NULL,
     signature_valid     boolean NOT NULL DEFAULT false,
     status              webhook_event_status NOT NULL DEFAULT 'unrouted',
+    attempts            integer NOT NULL DEFAULT 0,
+    next_retry_at       timestamptz(6),
     error               text,
     received_at         timestamptz(6) NOT NULL DEFAULT now(),
     processed_at        timestamptz(6)
@@ -544,6 +579,8 @@ CREATE UNIQUE INDEX uq_plans_code ON plans (code);
 CREATE UNIQUE INDEX uq_invoices_invoice_number ON invoices (invoice_number);
 CREATE UNIQUE INDEX uq_payments_idempotency_key ON payments (idempotency_key);
 CREATE UNIQUE INDEX uq_whatsapp_accounts_phone_number_id ON whatsapp_accounts (phone_number_id);
+CREATE UNIQUE INDEX uq_webhook_events_dedupe_hash ON webhook_events (dedupe_hash);
+CREATE UNIQUE INDEX uq_whatsapp_onboarding_state_nonce ON whatsapp_onboarding_sessions (state_nonce);
 CREATE UNIQUE INDEX uq_feature_flags_key ON feature_flags (key);
 CREATE UNIQUE INDEX uq_blog_posts_slug_locale ON blog_posts (slug, locale);
 CREATE UNIQUE INDEX uq_ai_models_provider_name ON ai_models (ai_provider_id, model_name);
@@ -555,9 +592,10 @@ CREATE UNIQUE INDEX uq_ai_models_provider_name ON ai_models (ai_provider_id, mod
 CREATE UNIQUE INDEX uq_one_live_subscription ON subscriptions (tenant_id)
     WHERE status IN ('trialing', 'active', 'past_due');
 
--- The provider event id makes webhook delivery idempotent, but it is nullable.
-CREATE UNIQUE INDEX uq_webhook_event ON webhook_events (provider_event_id)
-    WHERE provider_event_id IS NOT NULL;
+-- Idempotency is carried by webhook_events.dedupe_hash, which is NOT NULL and
+-- fully unique. It cannot be provider_event_id: a status update repeats the id
+-- of the message it describes, so a unique index on it would silently discard
+-- every delivery receipt.
 
 -- =============================================================================
 -- CHECK constraints
@@ -598,7 +636,16 @@ CREATE INDEX ix_whatsapp_accounts_tenant_id ON whatsapp_accounts (tenant_id);
 -- The retry queue reads only these two states.
 CREATE INDEX ix_webhook_events_retry ON webhook_events (status, received_at DESC)
     WHERE status IN ('unrouted', 'failed');
-CREATE INDEX ix_webhook_events_provider_event_id ON webhook_events (provider_event_id);
+CREATE INDEX ix_webhook_events_provider_event_id ON webhook_events (provider_event_id)
+    WHERE provider_event_id IS NOT NULL;
+
+-- The routing column: every inbound event is matched on it before any tenant
+-- database can be opened.
+CREATE INDEX ix_webhook_events_phone_number_id ON webhook_events (phone_number_id);
+
+CREATE INDEX ix_whatsapp_onboarding_tenant
+    ON whatsapp_onboarding_sessions (tenant_id, created_at DESC);
+CREATE INDEX ix_whatsapp_onboarding_expires ON whatsapp_onboarding_sessions (expires_at);
 
 CREATE INDEX ix_tenant_databases_migration ON tenant_databases (schema_version, migration_state);
 CREATE INDEX ix_admin_audit_logs_tenant_created ON admin_audit_logs (tenant_id, created_at DESC);

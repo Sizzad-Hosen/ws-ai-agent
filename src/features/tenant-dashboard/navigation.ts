@@ -1,6 +1,7 @@
 import {
   Bot,
   LayoutDashboard,
+  MessageCircle,
   Package,
   Settings,
   ShoppingCart,
@@ -33,6 +34,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   products: Package,
   categories: Tags,
   orders: ShoppingCart,
+  whatsapp: MessageCircle,
   "ai-usage": Bot,
   settings: Settings,
 };

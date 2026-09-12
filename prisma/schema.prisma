@@ -173,13 +173,32 @@ enum PaymentStatus {
   @@map("payment_status")
 }
 
+/// The connection state machine. A finished Embedded Signup popup is not a
+/// connected tenant: the code must be exchanged, the number registered, the
+/// app subscribed to the WABA, and that subscription read back before any
+/// message can arrive. Each step is its own state so a failure says where.
 enum WhatsappAccountStatus {
-  PENDING      @map("pending")
-  CONNECTED    @map("connected")
-  DISCONNECTED @map("disconnected")
-  SUSPENDED    @map("suspended")
+  PENDING         @map("pending")
+  CONNECTING      @map("connecting")
+  TOKEN_EXCHANGED @map("token_exchanged")
+  REGISTERED      @map("registered")
+  SUBSCRIBED      @map("subscribed")
+  VERIFIED        @map("verified")
+  LIVE            @map("live")
+  FAILED          @map("failed")
+  DISCONNECTED    @map("disconnected")
 
   @@map("whatsapp_account_status")
+}
+
+/// Where one Embedded Signup attempt has got to.
+enum WhatsappOnboardingStatus {
+  STARTED   @map("started")
+  COMPLETED @map("completed")
+  FAILED    @map("failed")
+  EXPIRED   @map("expired")
+
+  @@map("whatsapp_onboarding_status")
 }
 
 enum WhatsappTemplateStatus {
@@ -403,6 +422,7 @@ model Tenant {
   invoices             Invoice[]
   payments             Payment[]
   whatsappAccounts     WhatsappAccount[]
+  whatsappOnboarding   WhatsappOnboardingSession[]
   whatsappTemplates    WhatsappTemplate[]
   webhookEvents        WebhookEvent[]
   aiConfigurations     TenantAiConfiguration[]
@@ -621,6 +641,8 @@ model WhatsappAccount {
   phoneNumberId      String                @unique(map: "uq_whatsapp_accounts_phone_number_id") @map("phone_number_id") @db.VarChar(150)
   wabaId             String                @map("waba_id") @db.VarChar(150)
   displayPhoneNumber String?               @map("display_phone_number") @db.VarChar(40)
+  /// The name Meta approved for the number, which is what a customer sees.
+  verifiedName       String?               @map("verified_name") @db.VarChar(180)
   businessName       String?               @map("business_name") @db.VarChar(180)
   tokenReference     String?               @map("token_reference")
   tokenExpiresAt     DateTime?             @map("token_expires_at") @db.Timestamptz(6)
@@ -630,16 +652,23 @@ model WhatsappAccount {
   /// columns in the schema; only their widths are readable in the diagram.
   status             WhatsappAccountStatus @default(PENDING)
   qualityRating      String?               @map("quality_rating") @db.VarChar(30)
-  messagingLimitTier String?               @map("messaging_limit_tier") @db.VarChar(30)
+  messagingLimit     String?               @map("messaging_limit") @db.VarChar(30)
   provider           String?               @db.VarChar(30)
+  /// When POST /{WABA_ID}/subscribed_apps last succeeded and was read back.
+  subscribedAt       DateTime?             @map("subscribed_at") @db.Timestamptz(6)
+  /// The last time anything arrived for this number. A silent number that
+  /// claims to be live is the failure this column exists to make visible.
+  lastWebhookAt      DateTime?             @map("last_webhook_at") @db.Timestamptz(6)
+  lastError          String?               @map("last_error")
   createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
-  templates     WhatsappTemplate[]
-  webhookEvents WebhookEvent[]
-  deliveryDaily MessageDeliveryDaily[]
+  templates          WhatsappTemplate[]
+  webhookEvents      WebhookEvent[]
+  deliveryDaily      MessageDeliveryDaily[]
+  onboardingSessions WhatsappOnboardingSession[]
 
   /// The hottest path in the database. Every inbound webhook routes on it.
   @@index([tenantId], map: "ix_whatsapp_accounts_tenant_id")
@@ -677,8 +706,15 @@ model WebhookEvent {
   providerEventId   String?            @map("provider_event_id") @db.VarChar(190)
   eventType         String             @map("event_type") @db.VarChar(100)
   payload           Json
+  /// SHA-256 over the stable identity of one change. NOT NULL and fully
+  /// unique, unlike `provider_event_id`: a message and a status update do not
+  /// share one id field, so a nullable partial index cannot carry idempotency.
+  /// This is the constraint that makes a redelivery a no-op.
+  dedupeHash        String             @unique(map: "uq_webhook_events_dedupe_hash") @map("dedupe_hash") @db.Char(64)
   signatureValid    Boolean            @default(false) @map("signature_valid")
   status            WebhookEventStatus @default(UNROUTED)
+  attempts          Int                @default(0)
+  nextRetryAt       DateTime?          @map("next_retry_at") @db.Timestamptz(6)
   error             String?
   receivedAt        DateTime           @default(now()) @map("received_at") @db.Timestamptz(6)
   processedAt       DateTime?          @map("processed_at") @db.Timestamptz(6)
@@ -686,8 +722,45 @@ model WebhookEvent {
   tenant  Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   account WhatsappAccount? @relation(fields: [whatsappAccountId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
-  @@index([providerEventId], map: "ix_webhook_events_provider_event_id")
+  /// The routing column. Every inbound event is matched on it.
+  @@index([phoneNumberId], map: "ix_webhook_events_phone_number_id")
   @@map("webhook_events")
+}
+
+/// One attempt at connecting a tenant through Embedded Signup.
+///
+/// `state_nonce` is minted server-side and unique. It is what ties the code the
+/// browser posts back to the tenant that started the flow: without it, a
+/// callback is an unauthenticated request carrying attacker-chosen ids.
+///
+/// `waba_id` and `phone_number_id` are recorded as the popup reported them.
+/// They are NOT trusted. The callback verifies both against the Graph API
+/// before anything is written to `whatsapp_accounts`.
+model WhatsappOnboardingSession {
+  id                String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String                   @map("tenant_id") @db.Uuid
+  stateNonce        String                   @unique(map: "uq_whatsapp_onboarding_state_nonce") @map("state_nonce") @db.VarChar(190)
+  status            WhatsappOnboardingStatus @default(STARTED)
+  wabaId            String?                  @map("waba_id") @db.VarChar(150)
+  phoneNumberId     String?                  @map("phone_number_id") @db.VarChar(150)
+  /// The Meta error code, kept so a failure can be mapped to a sentence the
+  /// tenant can act on rather than shown as a raw provider string.
+  errorCode         String?                  @map("error_code") @db.VarChar(60)
+  errorMessage      String?                  @map("error_message")
+  /// A nonce that never expires is one an attacker has time to find.
+  expiresAt         DateTime                 @map("expires_at") @db.Timestamptz(6)
+  /// Set the moment the nonce is spent, so a replay finds it already used.
+  consumedAt        DateTime?                @map("consumed_at") @db.Timestamptz(6)
+  whatsappAccountId String?                  @map("whatsapp_account_id") @db.Uuid
+  createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant  Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  account WhatsappAccount? @relation(fields: [whatsappAccountId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([tenantId, createdAt(sort: Desc)], map: "ix_whatsapp_onboarding_tenant")
+  @@index([expiresAt], map: "ix_whatsapp_onboarding_expires")
+  @@map("whatsapp_onboarding_sessions")
 }
 
 // -------------------------------------------------------------------------- ai
