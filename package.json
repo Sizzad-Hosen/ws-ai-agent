@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:ready": "npm run db:local && npm run dev",
+    "dev:https": "next dev --experimental-https",
     "build": "next build",
     "start": "next start",
     "lint": "eslint src scripts prisma/seed.ts prisma/seed eslint.config.mjs next.config.ts --max-warnings=0",

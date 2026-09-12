@@ -90,6 +90,23 @@ Then **Manage** the webhook fields and subscribe to:
 | `message_template_status_update` | Meta approving or rejecting a template |
 | `account_update` | How a tenant learns their number was restricted or banned |
 
+### Local development needs HTTPS
+
+Meta refuses `FB.login` from an `http://` page and throws rather than calling
+back, so the Connect button cannot work against plain `localhost:3000`. Run the
+dev server with a self-signed certificate instead:
+
+```bash
+npm run dev:https        # https://localhost:3000
+```
+
+The first run downloads mkcert and generates the certificate; your browser will
+warn about it once and let you proceed. The connect screen checks the protocol
+before opening the popup and says this if you are on http.
+
+Add `https://localhost:3000` to **App Domains** and **Valid OAuth Redirect
+URIs** (step 6) or the popup will refuse to open.
+
 ### Testing before you have a public URL
 
 The callback must be reachable from Meta. In development, tunnel it:
@@ -155,7 +172,7 @@ together, and a joined value is then served wherever the first one is used.
 ## 9. Check it
 
 ```bash
-npm run dev
+npm run dev:https                     # Meta requires HTTPS for its popup
 npm run dev:session -- northwind      # prints a cookie to paste in the console
 ```
 

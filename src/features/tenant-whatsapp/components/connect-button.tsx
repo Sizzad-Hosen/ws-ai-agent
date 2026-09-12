@@ -232,6 +232,17 @@ export function ConnectButton({
       return;
     }
 
+    // Meta refuses FB.login from a non-HTTPS page, and throws rather than
+    // calling back — so this has to be caught before the click, not after.
+    if (window.location.protocol !== "https:") {
+      setMessage(
+        "Meta only allows its sign-in from an HTTPS page. Restart the dev " +
+          "server with: npm run dev:https",
+      );
+      setBusy(false);
+      return;
+    }
+
     if (!window.FB) {
       setMessage(
         "Meta's sign-in has not loaded yet. Wait a moment and try again, or " +
@@ -248,32 +259,44 @@ export function ConnectButton({
       version: "v21.0",
     });
 
-    window.FB.login(
-      (response) => {
-        const code = response.authResponse?.code;
+    try {
+      window.FB.login(
+        (response) => {
+          const code = response.authResponse?.code;
 
-        if (!code) {
-          setMessage(readableError("1006").sentence);
-          setBusy(false);
-          return;
-        }
+          if (!code) {
+            setMessage(readableError("1006").sentence);
+            setBusy(false);
+            return;
+          }
 
-        void finish(start, code, pin);
-      },
-      {
-        config_id: start.configId,
-        response_type: "code",
-        // The nonce travels with the popup so Meta echoes it back, and is
-        // checked server-side against the session this started.
-        override_default_response_type: true,
-        extras: {
-          setup: {},
-          featureType: "",
-          sessionInfoVersion: "3",
-          state: start.stateNonce,
+          void finish(start, code, pin);
         },
-      },
-    );
+        {
+          config_id: start.configId,
+          response_type: "code",
+          // The nonce travels with the popup so Meta echoes it back, and is
+          // checked server-side against the session this started.
+          override_default_response_type: true,
+          extras: {
+            setup: {},
+            featureType: "",
+            sessionInfoVersion: "3",
+            state: start.stateNonce,
+          },
+        },
+      );
+    } catch (error: unknown) {
+      // Anything the SDK throws synchronously ends the attempt here. Without
+      // this the button sits on "Connecting…" forever, because the only
+      // setBusy(false) was inside a callback that never runs.
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Meta's sign-in could not be opened.",
+      );
+      setBusy(false);
+    }
   }
 
   const isDisabled = disabled || busy;
