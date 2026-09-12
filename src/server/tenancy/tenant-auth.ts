@@ -60,6 +60,8 @@ export interface TenantSessionUser {
   readonly id: string;
   readonly name: string;
   readonly email: string;
+  /** URL of the profile picture, or null when none has been uploaded. */
+  readonly avatarUrl: string | null;
   /**
    * True while the account still holds the password it was created with.
    * Tracked as `status = INVITED`, which already means "created, setup not
@@ -155,7 +157,13 @@ export async function getCurrentTenantUser(
         expiresAt: true,
         revokedAt: true,
         user: {
-          select: { id: true, name: true, email: true, status: true },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatarUrl: true,
+            status: true,
+          },
         },
       },
     });
@@ -176,6 +184,7 @@ export async function getCurrentTenantUser(
       id: session.user.id,
       name: session.user.name,
       email: session.user.email,
+      avatarUrl: session.user.avatarUrl,
       mustChangePassword: session.user.status === "INVITED",
     };
   } catch (error: unknown) {

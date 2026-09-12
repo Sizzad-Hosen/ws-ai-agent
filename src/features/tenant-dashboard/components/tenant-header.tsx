@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { Bell, LogOut } from "lucide-react";
 import { useTransition } from "react";
 
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { tenantLogoutAction } from "@/features/tenant-dashboard/actions/tenant-logout-action";
+import { tenantHref } from "@/features/tenant-dashboard/routes";
 import type { TenantSessionUser } from "@/server/tenancy/tenant-auth";
 
 interface TenantHeaderProps {
@@ -46,8 +48,11 @@ export function TenantHeader({ slug, businessName, user }: TenantHeaderProps) {
           <Bell className="size-4" aria-hidden="true" />
         </Button>
 
-        <span className="hidden items-center gap-2 sm:flex">
-          <Avatar name={user.name} size="sm" />
+        <Link
+          href={tenantHref(slug, "profile")}
+          className="hover:bg-muted hidden items-center gap-2 rounded-md px-2 py-1 transition-colors sm:flex"
+        >
+          <Avatar name={user.name} src={user.avatarUrl} size="sm" />
           <span className="min-w-0">
             <span className="text-foreground block truncate text-sm font-medium">
               {user.name}
@@ -56,7 +61,8 @@ export function TenantHeader({ slug, businessName, user }: TenantHeaderProps) {
               {user.email}
             </span>
           </span>
-        </span>
+          <span className="sr-only">Open your profile</span>
+        </Link>
 
         <Button
           variant="ghost"
