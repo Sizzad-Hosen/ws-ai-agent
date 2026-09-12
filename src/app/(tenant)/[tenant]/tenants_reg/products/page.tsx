@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { Plus } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { TBody, TD, TH, TR, TableEmpty } from "@/components/ui/table";
 import { TenantShell } from "@/features/tenant-dashboard/components/tenant-shell";
 import { tenantHref } from "@/features/tenant-dashboard/routes";
@@ -35,6 +38,14 @@ export default async function TenantProductsPage({
       user={user}
       title="Products"
       description="The catalogue the AI agent sells from."
+      actions={
+        <Button asChild>
+          <Link href={`${tenantHref(tenant.slug, "products")}/new`}>
+            <Plus className="size-4" aria-hidden="true" />
+            New product
+          </Link>
+        </Button>
+      }
     >
       <TenantListCard
         basePath={tenantHref(tenant.slug, "products")}
@@ -76,7 +87,12 @@ export default async function TenantProductsPage({
             page.items.map((row) => (
               <TR key={row.id}>
                 <TD>
-                  <span className="block font-medium">{row.name}</span>
+                  <Link
+                    href={`${tenantHref(tenant.slug, "products")}/${row.id}`}
+                    className="block font-medium underline-offset-2 hover:underline"
+                  >
+                    {row.name}
+                  </Link>
                   {row.sku ? (
                     <span className="text-muted-foreground block font-mono text-xs">
                       {row.sku}

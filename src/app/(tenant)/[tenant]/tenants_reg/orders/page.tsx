@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { TBody, TD, TH, TR, TableEmpty } from "@/components/ui/table";
@@ -76,7 +77,12 @@ export default async function TenantOrdersPage({
             page.items.map((row) => (
               <TR key={row.id}>
                 <TD mono className="font-medium">
-                  {row.orderNumber}
+                  <Link
+                    href={`${tenantHref(tenant.slug, "orders")}/${row.id}`}
+                    className="underline-offset-2 hover:underline"
+                  >
+                    {row.orderNumber}
+                  </Link>
                 </TD>
                 <TD>
                   {row.customerName ?? (

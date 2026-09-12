@@ -42,19 +42,27 @@ describe("summarizeUsage", () => {
     expect(summary.totalTokens).toBe(450);
   });
 
-  it("sums cost exactly, without floating-point drift", () => {
-    // 0.000001 added 1,000,000 times is 1.000000. Summed as doubles this
-    // lands on 1.0000000000079181, which the sixth decimal place would show.
-    // One shared row, repeated. Allocating a million objects would dominate
-    // the run time and prove nothing extra.
-    const rows: UsageLogRow[] = new Array<UsageLogRow>(1_000_000).fill(
-      row({ estimatedCost: "0.000001" }),
-    );
+  // A million rows is what it takes for the drift to reach the sixth decimal
+  // place, and summing them runs close to vitest's five-second default on a
+  // loaded machine. The explicit timeout is what keeps this from failing for
+  // reasons that have nothing to do with the assertion.
+  it(
+    "sums cost exactly, without floating-point drift",
+    { timeout: 30_000 },
+    () => {
+      // 0.000001 added 1,000,000 times is 1.000000. Summed as doubles this
+      // lands on 1.0000000000079181, which the sixth decimal place would show.
+      // One shared row, repeated. Allocating a million objects would dominate
+      // the run time and prove nothing extra.
+      const rows: UsageLogRow[] = new Array<UsageLogRow>(1_000_000).fill(
+        row({ estimatedCost: "0.000001" }),
+      );
 
-    expect(summarizeUsage(rows, WINDOW_START, 1).estimatedCost).toBe(
-      "1.000000",
-    );
-  });
+      expect(summarizeUsage(rows, WINDOW_START, 1).estimatedCost).toBe(
+        "1.000000",
+      );
+    },
+  );
 
   it("treats a null cost as zero rather than as NaN", () => {
     const summary = summarizeUsage(

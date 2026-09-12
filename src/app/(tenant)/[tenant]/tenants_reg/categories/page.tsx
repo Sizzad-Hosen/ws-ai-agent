@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { Plus } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { TBody, TD, TH, TR, TableEmpty } from "@/components/ui/table";
 import { TenantShell } from "@/features/tenant-dashboard/components/tenant-shell";
 import { tenantHref } from "@/features/tenant-dashboard/routes";
@@ -31,6 +34,14 @@ export default async function TenantCategoriesPage({
       user={user}
       title="Categories"
       description="How the catalogue is grouped. A category may sit under a parent."
+      actions={
+        <Button asChild>
+          <Link href={`${tenantHref(tenant.slug, "categories")}/new`}>
+            <Plus className="size-4" aria-hidden="true" />
+            New category
+          </Link>
+        </Button>
+      }
     >
       <TenantListCard
         basePath={tenantHref(tenant.slug, "categories")}
@@ -70,7 +81,12 @@ export default async function TenantCategoriesPage({
             page.items.map((row) => (
               <TR key={row.id}>
                 <TD>
-                  <span className="block font-medium">{row.name}</span>
+                  <Link
+                    href={`${tenantHref(tenant.slug, "categories")}/${row.id}/edit`}
+                    className="block font-medium underline-offset-2 hover:underline"
+                  >
+                    {row.name}
+                  </Link>
                   <span className="text-muted-foreground block font-mono text-xs">
                     {row.slug}
                   </span>

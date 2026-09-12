@@ -34,7 +34,8 @@
     "verify:email": "node --conditions=react-server --import tsx scripts/verify-email.ts",
     "verify:isolation": "node --conditions=react-server --import tsx scripts/verify-tenant-isolation.ts",
     "verify:ai-usage": "node --conditions=react-server --import tsx scripts/verify-ai-usage.ts",
-    "verify:tenant-pages": "node --conditions=react-server --import tsx scripts/verify-tenant-pages.ts"
+    "verify:tenant-pages": "node --conditions=react-server --import tsx scripts/verify-tenant-pages.ts",
+    "verify:catalogue": "node --conditions=react-server --import tsx scripts/verify-catalogue.ts"
   },
   "prisma": {
     "seed": "node --conditions=react-server --import tsx prisma/seed.ts"
