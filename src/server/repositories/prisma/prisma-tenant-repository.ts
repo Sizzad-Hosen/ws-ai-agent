@@ -1,4 +1,4 @@
-import { Prisma, TenantStatus } from "@prisma/client";
+import { Prisma, TenantApprovalStatus, TenantStatus } from "@prisma/client";
 
 import type {
   Tenant,
@@ -14,6 +14,7 @@ import type {
   TenantStatusChange,
 } from "@/server/repositories/contracts/tenant-repository";
 import type { PaginatedResult } from "@/types/repository";
+import type { TenantDisplayStatus } from "@/types/status";
 
 import {
   mapPlan,
@@ -25,6 +26,38 @@ import {
   tenantStatusMap,
   tenantStatusToPrisma,
 } from "./mappers";
+
+/**
+ * The stored columns behind each display status.
+ *
+ * The inverse of `tenantDisplayStatus`, and it has to stay that way: filtering
+ * on "approved" must return exactly the rows the list badges as approved. The
+ * unit test in `display-status.test.ts` holds the two together.
+ */
+function displayStatusWhere(
+  status: TenantDisplayStatus | undefined,
+): Prisma.TenantWhereInput {
+  switch (status) {
+    case undefined:
+      return {};
+    case "pending":
+      return { approvalStatus: TenantApprovalStatus.PENDING_REVIEW };
+    case "rejected":
+      return { approvalStatus: TenantApprovalStatus.REJECTED };
+    case "suspended":
+      return {
+        approvalStatus: TenantApprovalStatus.APPROVED,
+        status: TenantStatus.SUSPENDED,
+      };
+    case "approved":
+      // Every approved workspace that is not suspended, whatever else it is
+      // doing — provisioning, trialing, running, archived.
+      return {
+        approvalStatus: TenantApprovalStatus.APPROVED,
+        status: { not: TenantStatus.SUSPENDED },
+      };
+  }
+}
 
 /** The subscription that determines the plan and MRR shown for a tenant. */
 const CURRENT_SUBSCRIPTION = {
@@ -168,7 +201,7 @@ export class PrismaTenantRepository implements TenantRepository {
       // `tenants` is soft-deleted, and the step-4 partial index assumes every
       // list read excludes the deleted rows.
       deletedAt: null,
-      ...(query.status ? { status: tenantStatusToPrisma[query.status] } : {}),
+      ...displayStatusWhere(query.status),
       ...(query.planCode
         ? {
             subscriptions: {

@@ -38,6 +38,45 @@ export const TENANT_STATUSES = [
 ] as const;
 export type TenantStatus = (typeof TENANT_STATUSES)[number];
 
+/**
+ * The tenant status the console shows and filters on.
+ *
+ * `tenants` stores the verdict and the lifecycle in two columns, but an
+ * operator reads one status per row, so the two collapse into these four for
+ * display. Suspension is the only lifecycle state that outranks the verdict:
+ * everything else an approved workspace can be doing — provisioning, trial,
+ * active — still reads as "approved" to someone scanning the list.
+ *
+ * This is a presentation concern only. Nothing writes it, and the two columns
+ * stay separate in the database and in the transition rules, where confusing
+ * them would let an archived tenant be suspended.
+ */
+export const TENANT_DISPLAY_STATUSES = [
+  "pending",
+  "approved",
+  "suspended",
+  "rejected",
+] as const;
+export type TenantDisplayStatus = (typeof TENANT_DISPLAY_STATUSES)[number];
+
+/**
+ * Collapses the two stored columns into the one an operator reads.
+ *
+ * Order matters: a rejected or still-pending application has no meaningful
+ * lifecycle, so the verdict is answered first. `archived` reports as approved,
+ * because the application was approved and archiving is not a verdict — if
+ * archived tenants should read differently, they need a fifth status.
+ */
+export function tenantDisplayStatus(tenant: {
+  readonly approvalStatus: TenantApprovalStatus;
+  readonly status: TenantStatus;
+}): TenantDisplayStatus {
+  if (tenant.approvalStatus === "rejected") return "rejected";
+  if (tenant.approvalStatus === "pending_review") return "pending";
+
+  return tenant.status === "suspended" ? "suspended" : "approved";
+}
+
 /** `tenant_registrations.status`. */
 export const REGISTRATION_STATUSES = [
   "submitted",

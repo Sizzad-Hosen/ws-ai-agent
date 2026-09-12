@@ -15,9 +15,9 @@ import { hasPermission, requirePermission } from "@/server/auth/authorization";
 import { repositories } from "@/server/repositories";
 import {
   REVIEW_QUEUE_STATUSES,
-  TENANT_STATUSES,
+  TENANT_DISPLAY_STATUSES,
   WHATSAPP_CONNECTION_STATUSES,
-  type TenantStatus,
+  type TenantDisplayStatus,
   type WhatsappConnectionStatus,
 } from "@/types/status";
 
@@ -53,10 +53,10 @@ export default async function TenantsPage({
   const offset = clampOffset(single(params.offset));
 
   // Unknown filter values are dropped rather than passed to the repository.
-  // This screen filters the lifecycle column: "Trial" and "Suspended" are
-  // states a tenant is in, not verdicts a reviewer reached.
-  const status = TENANT_STATUSES.includes(statusParam as TenantStatus)
-    ? (statusParam as TenantStatus)
+  const status = TENANT_DISPLAY_STATUSES.includes(
+    statusParam as TenantDisplayStatus,
+  )
+    ? (statusParam as TenantDisplayStatus)
     : undefined;
   const whatsapp = WHATSAPP_CONNECTION_STATUSES.includes(
     whatsappParam as WhatsappConnectionStatus,
@@ -65,11 +65,11 @@ export default async function TenantsPage({
     : undefined;
 
   // Applications belong on this screen: a sign-up is a tenant-to-be, and a
-  // queue nobody looks at is a queue nobody works. They are excluded whenever a
-  // lifecycle filter is set, because an application has no lifecycle yet — it
-  // is not a tenant — and never on later pages, where they would repeat above
-  // every page of tenants.
-  const showPending = offset === 0 && status === undefined;
+  // queue nobody looks at is a queue nobody works. They show unfiltered and
+  // under the "Pending" filter, which is what an operator means by pending.
+  // Never on later pages, where they would repeat above every page of tenants.
+  const showPending =
+    offset === 0 && (status === undefined || status === "pending");
 
   const [result, plans, applications] = await Promise.all([
     repositories.tenants.findMany({

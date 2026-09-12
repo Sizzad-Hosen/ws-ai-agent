@@ -5,7 +5,10 @@ import { QuerySelect } from "@/components/shared/query-select";
 import { ROUTES } from "@/constants/routes";
 import { TENANT_STATUS_LABELS } from "@/features/tenants/status";
 import type { Plan } from "@/features/plans/types";
-import { TENANT_STATUSES, WHATSAPP_CONNECTION_STATUSES } from "@/types/status";
+import {
+  TENANT_DISPLAY_STATUSES,
+  WHATSAPP_CONNECTION_STATUSES,
+} from "@/types/status";
 import { WHATSAPP_STATUS_LABELS } from "@/features/tenants/status";
 
 interface TenantFiltersProps {
@@ -58,7 +61,7 @@ export function TenantFilters({
           label="Filter by tenant status"
           options={[
             { value: "", label: "Status: All" },
-            ...TENANT_STATUSES.map((value) => ({
+            ...TENANT_DISPLAY_STATUSES.map((value) => ({
               value,
               label: TENANT_STATUS_LABELS[value],
             })),

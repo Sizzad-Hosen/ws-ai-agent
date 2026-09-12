@@ -1,48 +1,33 @@
 import type { BadgeTone } from "@/components/ui/badge";
 import type {
   ProvisioningStatus,
-  TenantApprovalStatus,
-  TenantStatus,
+  TenantDisplayStatus,
   WebhookStatus,
   WhatsappConnectionStatus,
 } from "@/types/status";
 
 /*
- * Two badges, because a tenant has two statuses. The approval badge answers
- * "was this application accepted"; the lifecycle badge answers "what is this
- * workspace doing". Screen 02 shows the lifecycle, screen 03 the verdict.
+ * One badge per tenant. The two stored columns collapse into the four statuses
+ * `tenantDisplayStatus` derives, because an operator scanning the list reads
+ * one status per row, not two.
  */
 
-export const TENANT_APPROVAL_LABELS: Readonly<
-  Record<TenantApprovalStatus, string>
+export const TENANT_STATUS_LABELS: Readonly<
+  Record<TenantDisplayStatus, string>
 > = {
-  pending_review: "Pending Review",
+  pending: "Pending",
   approved: "Approved",
+  suspended: "Suspended",
   rejected: "Rejected",
 };
 
-export const TENANT_APPROVAL_TONES: Readonly<
-  Record<TenantApprovalStatus, BadgeTone>
+export const TENANT_STATUS_TONES: Readonly<
+  Record<TenantDisplayStatus, BadgeTone>
 > = {
-  pending_review: "warning",
+  pending: "warning",
   approved: "success",
-  rejected: "danger",
-};
-
-export const TENANT_STATUS_LABELS: Readonly<Record<TenantStatus, string>> = {
-  provisioning: "Provisioning",
-  trial: "Trial",
-  active: "Active",
-  suspended: "Suspended",
-  archived: "Archived",
-};
-
-export const TENANT_STATUS_TONES: Readonly<Record<TenantStatus, BadgeTone>> = {
-  provisioning: "info",
-  trial: "warning",
-  active: "success",
   suspended: "danger",
-  archived: "neutral",
+  rejected: "danger",
 };
 
 export const WHATSAPP_STATUS_LABELS: Readonly<

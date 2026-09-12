@@ -4,6 +4,7 @@ import { toPlanValues } from "@/features/plans/schemas";
 import { toAiConfigurationSettings } from "@/features/ai-settings/schemas";
 import { prisma } from "@/server/db/prisma";
 import { repositories } from "@/server/repositories";
+import { TENANT_DISPLAY_STATUSES, tenantDisplayStatus } from "@/types/status";
 
 async function main(): Promise<void> {
   // ---- plans: create, update, delete -------------------------------------
@@ -196,6 +197,48 @@ async function main(): Promise<void> {
     const restored = await repositories.tenants.findById(fixture.id);
     if (restored?.status !== "active") {
       throw new Error("Tenant reactivate did not persist.");
+    }
+
+    // ---- the status filter agrees with the badge --------------------------
+    // The console shows one status per tenant, derived from two columns, and
+    // filters on the same four values. If the filter and the badge disagree,
+    // a tenant is either missing from its own filter or listed under one it
+    // does not show — so this walks the fixture through each display status
+    // and checks the filter both finds it and excludes it from the others.
+    for (const [change, expected] of [
+      [{ status: "active" }, "approved"],
+      [{ status: "suspended" }, "suspended"],
+      [{ approvalStatus: "pending_review" }, "pending"],
+      [{ approvalStatus: "rejected" }, "rejected"],
+    ] as const) {
+      await repositories.tenants.updateStatuses(fixture.id, change);
+
+      const current = await repositories.tenants.findById(fixture.id);
+      if (!current) throw new Error("The status fixture vanished.");
+
+      const shown = tenantDisplayStatus(current);
+      if (shown !== expected) {
+        throw new Error(
+          `Expected the tenant to show as "${expected}", got "${shown}".`,
+        );
+      }
+
+      for (const filter of TENANT_DISPLAY_STATUSES) {
+        const page = await repositories.tenants.findMany({
+          status: filter,
+          search: unique,
+          limit: 100,
+        });
+        const found = page.items.some((item) => item.tenant.id === fixture.id);
+
+        if (found !== (filter === expected)) {
+          throw new Error(
+            found
+              ? `A tenant showing as "${shown}" was returned by the "${filter}" filter.`
+              : `A tenant showing as "${shown}" was missing from the "${filter}" filter.`,
+          );
+        }
+      }
     }
   } finally {
     await prisma.tenant.delete({ where: { id: fixture.id } });

@@ -1,6 +1,7 @@
 import type {
   ProvisioningStatus,
   TenantApprovalStatus,
+  TenantDisplayStatus,
   TenantStatus,
   WebhookStatus,
   WhatsappConnectionStatus,
@@ -118,8 +119,8 @@ export interface TenantDetail {
 
 export interface TenantListFilters {
   readonly search?: string;
-  /** Filters the lifecycle column, which is what screen 02 shows. */
-  readonly status?: TenantStatus;
+  /** The one status the console shows, derived from the two stored columns. */
+  readonly status?: TenantDisplayStatus;
   readonly planCode?: string;
   readonly whatsapp?: WhatsappConnectionStatus;
 }

@@ -12,11 +12,10 @@ import { PLATFORM_PERMISSIONS } from "@/constants/permissions";
 import { ROUTES } from "@/constants/routes";
 import { InfrastructurePanel } from "@/features/tenants/components/infrastructure-panel";
 import {
-  TENANT_APPROVAL_LABELS,
-  TENANT_APPROVAL_TONES,
   TENANT_STATUS_LABELS,
   TENANT_STATUS_TONES,
 } from "@/features/tenants/status";
+import { tenantDisplayStatus } from "@/types/status";
 import { TenantRowActions } from "@/features/tenants/components/tenant-row-actions";
 import { hasPermission, requirePermission } from "@/server/auth/authorization";
 import { repositories } from "@/server/repositories";
@@ -56,14 +55,9 @@ export default async function TenantDetailPage({
         ]}
         title={tenant.businessName}
         meta={
-          <>
-            <Badge tone={TENANT_APPROVAL_TONES[tenant.approvalStatus]} dot>
-              {TENANT_APPROVAL_LABELS[tenant.approvalStatus]}
-            </Badge>
-            <Badge tone={TENANT_STATUS_TONES[tenant.status]} dot>
-              {TENANT_STATUS_LABELS[tenant.status]}
-            </Badge>
-          </>
+          <Badge tone={TENANT_STATUS_TONES[tenantDisplayStatus(tenant)]} dot>
+            {TENANT_STATUS_LABELS[tenantDisplayStatus(tenant)]}
+          </Badge>
         }
         description={
           <span className="flex flex-wrap items-center gap-4">

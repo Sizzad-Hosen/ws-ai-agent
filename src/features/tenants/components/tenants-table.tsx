@@ -20,12 +20,11 @@ import type {
   TenantListItem,
 } from "@/features/tenants/types";
 import {
-  TENANT_APPROVAL_LABELS,
-  TENANT_APPROVAL_TONES,
   TENANT_STATUS_LABELS,
   TENANT_STATUS_TONES,
   WHATSAPP_STATUS_LABELS,
 } from "@/features/tenants/status";
+import { tenantDisplayStatus } from "@/types/status";
 import type { WhatsappConnectionStatus } from "@/types/status";
 
 import { PendingApplicationActions } from "./pending-application-actions";
@@ -115,10 +114,8 @@ export function TenantsTable({
                 <WhatsappIcon status={null} />
               </TD>
               <TD>
-                {/* An application has no lifecycle yet, so this row shows
-                    the verdict column instead. */}
-                <Badge tone={TENANT_APPROVAL_TONES.pending_review} dot>
-                  {TENANT_APPROVAL_LABELS.pending_review}
+                <Badge tone={TENANT_STATUS_TONES.pending} dot>
+                  {TENANT_STATUS_LABELS.pending}
                 </Badge>
               </TD>
               <TD className="text-right">
@@ -197,10 +194,10 @@ export function TenantsTable({
                   <WhatsappIcon status={metrics.whatsappStatus} />
                 </TD>
                 <TD>
-                  {/* Live tenants show what the workspace is doing. The
-                      verdict is settled and no longer the interesting fact. */}
-                  <Badge tone={TENANT_STATUS_TONES[tenant.status]}>
-                    {TENANT_STATUS_LABELS[tenant.status]}
+                  <Badge
+                    tone={TENANT_STATUS_TONES[tenantDisplayStatus(tenant)]}
+                  >
+                    {TENANT_STATUS_LABELS[tenantDisplayStatus(tenant)]}
                   </Badge>
                 </TD>
                 <TD className="text-right">
