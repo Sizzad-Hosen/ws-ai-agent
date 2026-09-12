@@ -12,8 +12,14 @@ import { writeFileSync } from "node:fs";
 const OUTPUT = "src/server/tenancy/schema/001_initial.sql";
 
 /**
- * Must match TENANT_SCHEMA_VERSION in src/server/tenancy/provision-database.ts.
- * Bump both when the schema changes.
+ * The marker this baseline records, and the first entry in
+ * src/server/tenancy/schema/migrations.ts.
+ *
+ * It is NOT the current schema version. A schema change adds an incremental
+ * file to that list and leaves this alone: the baseline regenerates from the
+ * current Prisma schema, so a fresh database already contains the change, and
+ * each incremental file is written with IF NOT EXISTS so applying it there is
+ * a no-op that only records the version.
  */
 const VERSION = "2026.09.3";
 

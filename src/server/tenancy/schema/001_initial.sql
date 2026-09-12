@@ -65,6 +65,7 @@ CREATE TABLE "users" (
     "email" VARCHAR(190) NOT NULL,
     "password_hash" TEXT NOT NULL,
     "name" VARCHAR(120) NOT NULL,
+    "avatar_url" TEXT,
     "status" "user_status" NOT NULL DEFAULT 'INVITED',
     "last_login_at" TIMESTAMPTZ(3),
     "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -5,17 +5,22 @@ import path from "node:path";
 
 import { Client } from "pg";
 
+import { migrateTenantDatabase } from "./migrate-tenant";
+import { TENANT_BASELINE, TENANT_SCHEMA_VERSION } from "./schema/migrations";
+
 /**
- * Tenant schema version applied by {@link provisionTenantDatabase}.
+ * Tenant schema version a fully provisioned database is at.
  *
- * Must match the version `src/server/tenancy/schema/001_initial.sql` inserts
- * into `schema_migrations`, which is transcribed from
- * `docs/db/SaaS Tenant DB — Business + Storefront + AI + WhatsApp.png`.
+ * Re-exported from `schema/migrations.ts`, which owns the ordered list. It is
+ * the version of the *last* migration, not of the baseline: a new database is
+ * created from the baseline and then migrated up to here.
  */
-export const TENANT_SCHEMA_VERSION = "2026.09.3";
+export { TENANT_SCHEMA_VERSION };
 
 /** Maintenance database to connect to while creating another one. */
 const MAINTENANCE_DATABASE = "postgres";
+
+const SCHEMA_DIRECTORY = "src/server/tenancy/schema";
 
 export type ProvisionDatabaseOutcome =
   | { readonly ok: true; readonly created: boolean }
@@ -66,6 +71,16 @@ export async function provisionTenantDatabase(
   try {
     created = await createDatabase(adminUrl, databaseName);
     await applySchema(adminUrl, databaseName);
+
+    // The baseline only ever creates the schema as it was at that version.
+    // Everything since is applied here, which is also what brings a database
+    // provisioned by an older build up to date.
+    const migrated = await migrateTenantDatabase(databaseName);
+
+    if (!migrated.ok) {
+      return { ok: false, reason: migrated.reason };
+    }
+
     return { ok: true, created };
   } catch (error: unknown) {
     // Never surface the driver error verbatim: it can echo the connection
@@ -126,6 +141,9 @@ async function createDatabase(
  * twice fails. Rather than weaken every statement to IF NOT EXISTS — which
  * would silently accept a half-built database as finished — the version marker
  * is checked first and the whole script is applied as one unit.
+ *
+ * A database that already has a marker is left alone here; bringing it to the
+ * current version is `migrateTenantDatabase`'s job, not this one's.
  */
 async function applySchema(
   adminUrl: string,
@@ -141,21 +159,13 @@ async function applySchema(
   try {
     const existing = await existingSchema(client);
 
-    if (existing) {
-      if (existing.version === TENANT_SCHEMA_VERSION) return;
-
-      // Provisioned, but at a different version. Re-running the create script
-      // would fail on the first object that already exists and leave the
-      // database half-migrated, so this stops and says so. Migrating a tenant
-      // database between versions is a separate job this does not do yet.
-      throw new Error(
-        `Tenant database is at schema ${existing.version}, not ${TENANT_SCHEMA_VERSION}. ` +
-          `Migrating an existing tenant database is not implemented; recreate it or add a migration.`,
-      );
-    }
+    // Already provisioned, at whatever version. Re-running the create script
+    // would fail on the first object that already exists, so the baseline is
+    // skipped and `migrateTenantDatabase` takes it from here.
+    if (existing) return;
 
     const sql = await readFile(
-      path.join(process.cwd(), "src/server/tenancy/schema/001_initial.sql"),
+      path.join(process.cwd(), SCHEMA_DIRECTORY, TENANT_BASELINE.file),
       "utf8",
     );
 

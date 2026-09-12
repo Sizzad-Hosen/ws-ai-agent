@@ -189,6 +189,9 @@ model User {
   email        String     @unique @db.VarChar(190)
   passwordHash String     @map("password_hash")
   name         String     @db.VarChar(120)
+  /// URL into the avatar upload base, never file bytes. Mirrors
+  /// `admin_users.avatar_url` in the master database.
+  avatarUrl    String?    @map("avatar_url")
   status       UserStatus @default(INVITED)
   lastLoginAt  DateTime?  @map("last_login_at") @db.Timestamptz(3)
   createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
