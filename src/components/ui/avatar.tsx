@@ -35,18 +35,46 @@ function toneOf(seed: string): string {
 
 interface AvatarProps {
   readonly name: string;
-  readonly size?: "sm" | "default";
+  /** Uploaded picture. Initials are used when there is none. */
+  readonly src?: string | null;
+  readonly size?: "sm" | "default" | "lg";
   readonly className?: string;
 }
 
-export function Avatar({ name, size = "default", className }: AvatarProps) {
+const SIZES = {
+  sm: "size-7 text-[11px]",
+  default: "size-9 text-xs",
+  lg: "size-20 text-2xl",
+} as const;
+
+export function Avatar({
+  name,
+  src,
+  size = "default",
+  className,
+}: AvatarProps) {
+  const shared = cn("shrink-0 rounded-md", SIZES[size], className);
+
+  if (src) {
+    // A plain <img>: the file is our own upload at an arbitrary path, and
+    // next/image would need it whitelisted for no benefit at this size.
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt=""
+        className={cn(shared, "object-cover")}
+        aria-hidden="true"
+      />
+    );
+  }
+
   return (
     <span
       className={cn(
-        "grid shrink-0 place-items-center rounded-md font-semibold",
-        size === "sm" ? "size-7 text-[11px]" : "size-9 text-xs",
+        shared,
+        "grid place-items-center font-semibold",
         toneOf(name),
-        className,
       )}
       aria-hidden="true"
     >

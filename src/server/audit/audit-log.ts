@@ -32,6 +32,9 @@ export const AUDIT_ACTIONS = {
   AI_CONFIGURATION_UPDATE: "ai_configuration.update",
   SITE_SETTINGS_UPDATE: "site_settings.update",
   TENANT_IMPERSONATE: "tenant.impersonate",
+  PROFILE_UPDATE: "admin.profile_update",
+  AVATAR_UPDATE: "admin.avatar_update",
+  PASSWORD_CHANGE: "admin.password_change",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -39,7 +42,8 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
 export interface AuditEntry {
   readonly actor: BoSessionAdmin;
   readonly action: AuditAction;
-  readonly entityType: "tenant" | "registration" | "plan" | "settings";
+  readonly entityType:
+    "tenant" | "registration" | "plan" | "settings" | "admin";
   /** Null for settings that are not a row, such as the AI configuration. */
   readonly entityId?: string | null;
   /** Set when the action names a tenant, for the retention index. */

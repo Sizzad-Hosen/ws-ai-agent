@@ -15,6 +15,17 @@ const serverEnvSchema = z.object({
    * without a configured root, no host can be mistaken for a tenant.
    */
   TENANT_ROOT_DOMAIN: z.string().trim().toLowerCase().default(""),
+  /**
+   * Directory that uploaded avatars are written to, relative to the working
+   * directory. It sits under `public/` so Next serves the files directly.
+   *
+   * This is local-disk storage: it suits a single server and does not survive
+   * a container rebuild or spread across instances. Moving to object storage
+   * should mean replacing `avatar-storage.ts` and nothing else.
+   */
+  AVATAR_UPLOAD_DIR: z.string().trim().default("public/uploads/avatars"),
+  /** URL prefix the directory above is served under. */
+  AVATAR_URL_BASE: z.string().trim().default("/uploads/avatars"),
 });
 
 export const env = serverEnvSchema.parse({
@@ -22,4 +33,6 @@ export const env = serverEnvSchema.parse({
   DATABASE_URL: process.env.DATABASE_URL,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   TENANT_ROOT_DOMAIN: process.env.TENANT_ROOT_DOMAIN,
+  AVATAR_UPLOAD_DIR: process.env.AVATAR_UPLOAD_DIR,
+  AVATAR_URL_BASE: process.env.AVATAR_URL_BASE,
 });

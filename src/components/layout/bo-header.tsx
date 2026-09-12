@@ -1,17 +1,25 @@
+import Link from "next/link";
 import { Bell, CircleQuestionMark, History, Menu, Search } from "lucide-react";
 
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { APP_CONFIG, APP_MARK } from "@/config/app";
+import { ROUTES } from "@/constants/routes";
 import type { BoSessionAdmin } from "@/server/auth/types";
 
 interface BoHeaderProps {
   readonly admin: BoSessionAdmin;
+  /** Uploaded profile picture; initials are shown when there is none. */
+  readonly avatarUrl?: string | null;
   /** Unread notification count; hidden entirely when zero. */
   readonly notificationCount?: number;
 }
 
-export function BoHeader({ admin, notificationCount = 0 }: BoHeaderProps) {
+export function BoHeader({
+  admin,
+  avatarUrl = null,
+  notificationCount = 0,
+}: BoHeaderProps) {
   return (
     <header className="bg-card border-border sticky top-0 z-20 flex h-16 items-center gap-4 border-b px-4 sm:px-6">
       <div className="flex items-center gap-3 md:hidden">
@@ -73,13 +81,19 @@ export function BoHeader({ admin, notificationCount = 0 }: BoHeaderProps) {
           aria-hidden="true"
         />
 
-        <div className="hidden text-right sm:block">
-          <p className="text-sm font-medium">{admin.name}</p>
-          <p className="text-muted-foreground text-xs capitalize">
-            {admin.role.replaceAll("_", " ")}
-          </p>
-        </div>
-        <Avatar name={admin.name} className="ml-2 rounded-full" />
+        <Link
+          href={ROUTES.bo.profile}
+          className="hover:bg-subtle ml-1 flex items-center gap-2 rounded-md px-2 py-1 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+          aria-label={`Your profile, ${admin.name}`}
+        >
+          <span className="hidden text-right sm:block">
+            <span className="block text-sm font-medium">{admin.name}</span>
+            <span className="text-muted-foreground block text-xs capitalize">
+              {admin.role.replaceAll("_", " ")}
+            </span>
+          </span>
+          <Avatar name={admin.name} src={avatarUrl} className="rounded-full" />
+        </Link>
 
         <Button
           variant="ghost"

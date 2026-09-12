@@ -29,6 +29,7 @@ export const ROUTES = {
     whatsapp: "/bo/whatsapp",
     messages: "/bo/messages",
     billing: "/bo/billing",
+    profile: "/bo/profile",
     system: "/bo/system",
     auditLogs: "/bo/audit-logs",
   },

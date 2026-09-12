@@ -59,4 +59,23 @@ export class PrismaSessionRepository implements SessionRepository {
     });
     return result.count;
   }
+
+  async revokeOthersForAdmin(
+    adminId: string,
+    keepTokenHash: string,
+  ): Promise<number> {
+    // Revoked rather than deleted: `findByTokenHash` already treats a revoked
+    // session as dead, and keeping the row leaves a record that the session
+    // existed and when it ended.
+    const result = await prisma.adminSession.updateMany({
+      where: {
+        adminUserId: adminId,
+        tokenHash: { not: keepTokenHash },
+        revokedAt: null,
+      },
+      data: { revokedAt: new Date() },
+    });
+
+    return result.count;
+  }
 }

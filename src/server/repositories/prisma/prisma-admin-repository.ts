@@ -1,9 +1,13 @@
-import { AdminStatus } from "@prisma/client";
+import { AdminStatus, Prisma } from "@prisma/client";
 
 import type { PlatformAdmin } from "@/features/auth/types";
 import type { AdminCredentials } from "@/server/auth/types";
 import { prisma } from "@/server/db/prisma";
-import type { AdminRepository } from "@/server/repositories/contracts/admin-repository";
+import type {
+  AdminRepository,
+  ProfileUpdate,
+  UpdateProfileResult,
+} from "@/server/repositories/contracts/admin-repository";
 import type { ListQuery, PaginatedResult } from "@/types/repository";
 
 import { mapAdmin } from "./mappers";
@@ -27,6 +31,22 @@ export class PrismaAdminRepository implements AdminRepository {
     const admin = await prisma.adminUser.findUnique({
       where: { email: email.toLowerCase() },
     });
+
+    if (!admin) {
+      return null;
+    }
+
+    return {
+      id: admin.id,
+      email: admin.email,
+      passwordHash: admin.passwordHash,
+      role: mapAdmin(admin).role,
+      isActive: admin.status === AdminStatus.ACTIVE,
+    };
+  }
+
+  async findCredentialsById(id: string): Promise<AdminCredentials | null> {
+    const admin = await prisma.adminUser.findUnique({ where: { id } });
 
     if (!admin) {
       return null;
@@ -75,5 +95,45 @@ export class PrismaAdminRepository implements AdminRepository {
       where: { id },
       data: { lastLoginAt: signedInAt },
     });
+  }
+
+  async updateProfile(
+    id: string,
+    values: ProfileUpdate,
+  ): Promise<UpdateProfileResult> {
+    try {
+      await prisma.adminUser.update({
+        where: { id },
+        data: { name: values.name, email: values.email },
+      });
+    } catch (error: unknown) {
+      // The unique index is what actually decides, so the conflict is caught
+      // here rather than guessed at with a read first, which would race.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        return { ok: false, reason: "email-taken" };
+      }
+
+      throw error;
+    }
+
+    return { ok: true };
+  }
+
+  async updateAvatarUrl(id: string, avatarUrl: string): Promise<string | null> {
+    const previous = await prisma.adminUser.findUnique({
+      where: { id },
+      select: { avatarUrl: true },
+    });
+
+    await prisma.adminUser.update({ where: { id }, data: { avatarUrl } });
+
+    return previous?.avatarUrl ?? null;
+  }
+
+  async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
+    await prisma.adminUser.update({ where: { id }, data: { passwordHash } });
   }
 }

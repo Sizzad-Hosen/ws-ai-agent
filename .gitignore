@@ -40,6 +40,9 @@ yarn-error.log*
 # generated Prisma client for tenant databases (npm run db:generate rebuilds it)
 /src/generated/
 
+# uploaded files (avatars); user data, not source
+/public/uploads/
+
 # vercel
 .vercel
 
