@@ -68,7 +68,6 @@ export function ProductForm({
       categoryId: String(form.get("categoryId") ?? ""),
       status: String(form.get("status") ?? "DRAFT"),
       basePrice: String(form.get("basePrice") ?? ""),
-      compareAtPrice: String(form.get("compareAtPrice") ?? ""),
     };
 
     startTransition(async () => {
@@ -172,22 +171,9 @@ export function ProductForm({
           />
         </FormField>
 
-        <FormField
-          htmlFor="compareAtPrice"
-          label="Compare-at price"
-          error={fieldErrors.compareAtPrice?.[0]}
-        >
-          <Input
-            id="compareAtPrice"
-            name="compareAtPrice"
-            inputMode="decimal"
-            defaultValue={product?.compareAtPrice ?? ""}
-            placeholder="Optional"
-          />
-          <p className="text-muted-foreground text-xs">
-            The struck-through price. Leave empty if it is not on offer.
-          </p>
-        </FormField>
+        <div className="text-muted-foreground self-end text-xs">
+          A compare-at price is set per variant, on the product page.
+        </div>
       </div>
 
       <FormField

@@ -11,7 +11,7 @@ import type { BadgeTone } from "@/components/ui/badge";
  */
 
 export type TenantUserStatus = "INVITED" | "ACTIVE" | "SUSPENDED";
-export type TenantCustomerStatus = "ACTIVE" | "BLOCKED";
+export type TenantCustomerStatus = "ACTIVE" | "BLOCKED" | "OPTED_OUT";
 export type TenantProductStatus = "DRAFT" | "ACTIVE" | "ARCHIVED";
 export type TenantOrderStatus =
   | "PENDING"
@@ -40,6 +40,7 @@ export const CUSTOMER_STATUS_LABELS: Readonly<
 > = {
   ACTIVE: "Active",
   BLOCKED: "Blocked",
+  OPTED_OUT: "Opted out",
 };
 
 export const CUSTOMER_STATUS_TONES: Readonly<
@@ -47,6 +48,7 @@ export const CUSTOMER_STATUS_TONES: Readonly<
 > = {
   ACTIVE: "success",
   BLOCKED: "danger",
+  OPTED_OUT: "neutral",
 };
 
 export const PRODUCT_STATUS_LABELS: Readonly<
@@ -85,5 +87,49 @@ export const ORDER_STATUS_TONES: Readonly<
   SHIPPED: "info",
   DELIVERED: "success",
   CANCELLED: "danger",
+  REFUNDED: "neutral",
+};
+
+export type TenantCustomerSource = "WHATSAPP" | "WEB" | "MANUAL";
+
+export const CUSTOMER_SOURCE_LABELS: Readonly<
+  Record<TenantCustomerSource, string>
+> = {
+  WHATSAPP: "WhatsApp",
+  WEB: "Web",
+  MANUAL: "Added by hand",
+};
+
+export type TenantConversationState =
+  "BROWSING" | "COLLECTING" | "CONFIRMING" | "CONFIRMED";
+
+export const CONVERSATION_STATE_LABELS: Readonly<
+  Record<TenantConversationState, string>
+> = {
+  BROWSING: "Browsing",
+  COLLECTING: "Collecting details",
+  CONFIRMING: "Confirming",
+  CONFIRMED: "Confirmed",
+};
+
+/** The order's overall payment stance, not one attempt. */
+export type TenantOrderPaymentStatus =
+  "UNPAID" | "PARTIAL" | "PAID" | "REFUNDED";
+
+export const ORDER_PAYMENT_STATUS_LABELS: Readonly<
+  Record<TenantOrderPaymentStatus, string>
+> = {
+  UNPAID: "Unpaid",
+  PARTIAL: "Part paid",
+  PAID: "Paid",
+  REFUNDED: "Refunded",
+};
+
+export const ORDER_PAYMENT_STATUS_TONES: Readonly<
+  Record<TenantOrderPaymentStatus, BadgeTone>
+> = {
+  UNPAID: "warning",
+  PARTIAL: "info",
+  PAID: "success",
   REFUNDED: "neutral",
 };

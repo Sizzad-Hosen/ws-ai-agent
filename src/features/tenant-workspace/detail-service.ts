@@ -3,7 +3,10 @@ import "server-only";
 import type { TenantPrismaClient } from "@/server/tenancy/tenant-prisma";
 
 import type {
+  TenantConversationState,
+  TenantCustomerSource,
   TenantCustomerStatus,
+  TenantOrderPaymentStatus,
   TenantOrderStatus,
   TenantProductStatus,
 } from "./status";
@@ -42,11 +45,10 @@ export interface ProductDetail {
   readonly description: string | null;
   readonly status: TenantProductStatus;
   readonly basePrice: string;
-  readonly compareAtPrice: string | null;
   readonly categoryId: string | null;
   readonly categoryName: string | null;
-  readonly createdAt: string;
-  readonly updatedAt: string;
+  /** Soft delete. A product on an order line is never actually removed. */
+  readonly deletedAt: string | null;
   readonly variants: readonly VariantDetail[];
   /** Order lines across every variant; zero means the product may be deleted. */
   readonly orderedCount: number;
@@ -65,10 +67,8 @@ export async function getProduct(
       description: true,
       status: true,
       basePrice: true,
-      compareAtPrice: true,
       categoryId: true,
-      createdAt: true,
-      updatedAt: true,
+      deletedAt: true,
       category: { select: { name: true } },
       variants: {
         orderBy: { sku: "asc" },
@@ -112,11 +112,9 @@ export async function getProduct(
     description: product.description,
     status: product.status,
     basePrice: product.basePrice.toString(),
-    compareAtPrice: product.compareAtPrice?.toString() ?? null,
     categoryId: product.categoryId,
     categoryName: product.category?.name ?? null,
-    createdAt: product.createdAt.toISOString(),
-    updatedAt: product.updatedAt.toISOString(),
+    deletedAt: product.deletedAt?.toISOString() ?? null,
     variants,
     orderedCount: variants.reduce(
       (sum, variant) => sum + variant.orderedCount,
@@ -131,7 +129,6 @@ export interface CategoryDetail {
   readonly id: string;
   readonly name: string;
   readonly slug: string;
-  readonly description: string | null;
   readonly parentId: string | null;
   readonly isActive: boolean;
   readonly productCount: number;
@@ -148,7 +145,6 @@ export async function getCategory(
       id: true,
       name: true,
       slug: true,
-      description: true,
       parentId: true,
       isActive: true,
       _count: { select: { products: true, children: true } },
@@ -161,7 +157,6 @@ export async function getCategory(
     id: category.id,
     name: category.name,
     slug: category.slug,
-    description: category.description,
     parentId: category.parentId,
     isActive: category.isActive,
     productCount: category._count.products,
@@ -194,8 +189,9 @@ export interface CustomerAddress {
   readonly addressLine: string;
   readonly city: string;
   readonly region: string | null;
-  readonly postalCode: string | null;
   readonly isDefault: boolean;
+  /** The zone that sets the delivery charge, when one matched. */
+  readonly deliveryZoneName: string | null;
 }
 
 export interface CustomerOrderSummary {
@@ -206,24 +202,31 @@ export interface CustomerOrderSummary {
   readonly placedAt: string;
 }
 
-export interface CustomerContact {
+export interface CustomerConversationSummary {
   readonly id: string;
-  readonly phoneNumber: string;
-  readonly displayPhoneNumber: string | null;
+  readonly state: TenantConversationState;
   readonly status: string;
-  readonly conversations: number;
+  readonly aiPaused: boolean;
+  readonly lastMessageAt: string | null;
+  readonly messages: number;
 }
 
 export interface CustomerDetail {
   readonly id: string;
-  readonly name: string;
+  /** Nullable: a WhatsApp contact may never give a name. */
+  readonly name: string | null;
+  /** The WhatsApp identity. Unique, and how an inbound message finds them. */
+  readonly waId: string;
+  readonly profileName: string | null;
   readonly email: string | null;
-  readonly phone: string | null;
+  readonly phone: string;
   readonly status: TenantCustomerStatus;
-  readonly createdAt: string;
+  readonly source: TenantCustomerSource;
+  readonly firstSeenAt: string;
+  readonly lastSeenAt: string;
   readonly addresses: readonly CustomerAddress[];
   readonly orders: readonly CustomerOrderSummary[];
-  readonly contacts: readonly CustomerContact[];
+  readonly conversations: readonly CustomerConversationSummary[];
   readonly orderCount: number;
   /** Across delivered, shipped, confirmed and processing orders. */
   readonly lifetimeValue: string;
@@ -246,10 +249,14 @@ export async function getCustomer(
     select: {
       id: true,
       name: true,
+      waId: true,
+      profileName: true,
       email: true,
       phone: true,
       status: true,
-      createdAt: true,
+      source: true,
+      firstSeenAt: true,
+      lastSeenAt: true,
       addresses: {
         orderBy: [{ isDefault: "desc" }, { city: "asc" }],
         select: {
@@ -260,8 +267,8 @@ export async function getCustomer(
           addressLine: true,
           city: true,
           region: true,
-          postalCode: true,
           isDefault: true,
+          deliveryZone: { select: { name: true } },
         },
       },
       orders: {
@@ -274,13 +281,17 @@ export async function getCustomer(
           placedAt: true,
         },
       },
-      contacts: {
+      // Conversations replace the old `contacts` table: the WhatsApp identity
+      // now lives on the customer, so a thread hangs off them directly.
+      conversations: {
+        orderBy: { lastMessageAt: "desc" },
         select: {
           id: true,
-          phoneNumber: true,
-          displayPhoneNumber: true,
+          state: true,
           status: true,
-          _count: { select: { conversations: true } },
+          aiPaused: true,
+          lastMessageAt: true,
+          _count: { select: { messages: true } },
         },
       },
     },
@@ -297,11 +308,25 @@ export async function getCustomer(
   return {
     id: customer.id,
     name: customer.name,
+    waId: customer.waId,
+    profileName: customer.profileName,
     email: customer.email,
     phone: customer.phone,
     status: customer.status,
-    createdAt: customer.createdAt.toISOString(),
-    addresses: customer.addresses,
+    source: customer.source,
+    firstSeenAt: customer.firstSeenAt.toISOString(),
+    lastSeenAt: customer.lastSeenAt.toISOString(),
+    addresses: customer.addresses.map((address) => ({
+      id: address.id,
+      label: address.label,
+      recipientName: address.recipientName,
+      phone: address.phone,
+      addressLine: address.addressLine,
+      city: address.city,
+      region: address.region,
+      isDefault: address.isDefault,
+      deliveryZoneName: address.deliveryZone?.name ?? null,
+    })),
     orders: customer.orders.map((order) => ({
       id: order.id,
       orderNumber: order.orderNumber,
@@ -309,12 +334,13 @@ export async function getCustomer(
       total: order.total.toString(),
       placedAt: order.placedAt.toISOString(),
     })),
-    contacts: customer.contacts.map((contact) => ({
-      id: contact.id,
-      phoneNumber: contact.phoneNumber,
-      displayPhoneNumber: contact.displayPhoneNumber,
-      status: contact.status,
-      conversations: contact._count.conversations,
+    conversations: customer.conversations.map((conversation) => ({
+      id: conversation.id,
+      state: conversation.state,
+      status: conversation.status,
+      aiPaused: conversation.aiPaused,
+      lastMessageAt: conversation.lastMessageAt?.toISOString() ?? null,
+      messages: conversation._count.messages,
     })),
     orderCount: customer.orders.length,
     lifetimeValue: earned
@@ -346,14 +372,24 @@ export interface OrderPaymentRow {
   readonly paidAt: string | null;
 }
 
+export interface OrderEventRow {
+  readonly id: string;
+  readonly fromStatus: string | null;
+  readonly toStatus: string;
+  readonly actorType: string;
+  readonly note: string | null;
+  readonly createdAt: string;
+}
+
 export interface OrderDetail {
   readonly id: string;
   readonly orderNumber: string;
   readonly status: TenantOrderStatus;
+  readonly paymentStatus: TenantOrderPaymentStatus;
+  readonly source: string;
   readonly subtotal: string;
   readonly discount: string;
-  readonly shippingFee: string;
-  readonly tax: string;
+  readonly deliveryCharge: string;
   readonly total: string;
   readonly placedAt: string;
   readonly updatedAt: string;
@@ -361,9 +397,12 @@ export interface OrderDetail {
   readonly customerName: string | null;
   readonly customerEmail: string | null;
   readonly customerPhone: string | null;
+  readonly conversationId: string | null;
+  readonly deliveryZoneName: string | null;
   readonly shippingAddress: CustomerAddress | null;
   readonly items: readonly OrderLine[];
   readonly payments: readonly OrderPaymentRow[];
+  readonly events: readonly OrderEventRow[];
 }
 
 export async function getOrder(
@@ -376,15 +415,18 @@ export async function getOrder(
       id: true,
       orderNumber: true,
       status: true,
+      paymentStatus: true,
+      source: true,
       subtotal: true,
       discount: true,
-      shippingFee: true,
-      tax: true,
+      deliveryCharge: true,
       total: true,
       placedAt: true,
       updatedAt: true,
       customerId: true,
+      conversationId: true,
       customer: { select: { name: true, email: true, phone: true } },
+      deliveryZone: { select: { name: true } },
       shippingAddress: {
         select: {
           id: true,
@@ -394,8 +436,8 @@ export async function getOrder(
           addressLine: true,
           city: true,
           region: true,
-          postalCode: true,
           isDefault: true,
+          deliveryZone: { select: { name: true } },
         },
       },
       items: {
@@ -410,7 +452,7 @@ export async function getOrder(
         },
       },
       payments: {
-        orderBy: { createdAt: "desc" },
+        orderBy: { paidAt: "desc" },
         select: {
           id: true,
           provider: true,
@@ -421,19 +463,33 @@ export async function getOrder(
           paidAt: true,
         },
       },
+      events: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          fromStatus: true,
+          toStatus: true,
+          actorType: true,
+          note: true,
+          createdAt: true,
+        },
+      },
     },
   });
 
   if (!order) return null;
 
+  const address = order.shippingAddress;
+
   return {
     id: order.id,
     orderNumber: order.orderNumber,
     status: order.status,
+    paymentStatus: order.paymentStatus,
+    source: order.source,
     subtotal: order.subtotal.toString(),
     discount: order.discount.toString(),
-    shippingFee: order.shippingFee.toString(),
-    tax: order.tax.toString(),
+    deliveryCharge: order.deliveryCharge.toString(),
     total: order.total.toString(),
     placedAt: order.placedAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
@@ -441,7 +497,22 @@ export async function getOrder(
     customerName: order.customer?.name ?? null,
     customerEmail: order.customer?.email ?? null,
     customerPhone: order.customer?.phone ?? null,
-    shippingAddress: order.shippingAddress,
+    conversationId: order.conversationId,
+    deliveryZoneName: order.deliveryZone?.name ?? null,
+    shippingAddress:
+      address === null
+        ? null
+        : {
+            id: address.id,
+            label: address.label,
+            recipientName: address.recipientName,
+            phone: address.phone,
+            addressLine: address.addressLine,
+            city: address.city,
+            region: address.region,
+            isDefault: address.isDefault,
+            deliveryZoneName: address.deliveryZone?.name ?? null,
+          },
     // The snapshots are read rather than the live variant: a line must keep
     // saying what was bought even after the product is renamed.
     items: order.items.map((item) => ({
@@ -461,6 +532,15 @@ export async function getOrder(
       currency: payment.currency,
       status: payment.status,
       paidAt: payment.paidAt?.toISOString() ?? null,
+    })),
+    events: order.events.map((event) => ({
+      // BigInt does not survive the boundary into a Client Component.
+      id: event.id.toString(),
+      fromStatus: event.fromStatus,
+      toStatus: event.toStatus,
+      actorType: event.actorType,
+      note: event.note,
+      createdAt: event.createdAt.toISOString(),
     })),
   };
 }

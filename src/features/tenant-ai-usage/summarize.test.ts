@@ -13,7 +13,6 @@ function row(overrides: Partial<UsageLogRow> = {}): UsageLogRow {
     createdAt: new Date("2026-08-02T10:00:00.000Z"),
     inputTokens: BigInt(100),
     outputTokens: BigInt(50),
-    totalTokens: BigInt(150),
     estimatedCost: "0.001250",
     status: "SUCCESS",
     requestType: "chat_reply",

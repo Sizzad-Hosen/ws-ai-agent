@@ -16,7 +16,7 @@ import {
   PRODUCT_STATUS_TONES,
 } from "@/features/tenant-workspace/status";
 import { requireTenantPage } from "@/server/tenancy/tenant-guard";
-import { formatNumber, formatTimestamp } from "@/utils/format";
+import { formatNumber } from "@/utils/format";
 
 export const metadata: Metadata = {
   title: "Product",
@@ -66,19 +66,12 @@ export default async function ProductDetailPage({
           <Field label="Category">
             {product.categoryName ?? "Uncategorised"}
           </Field>
+          <Field label="Price">{product.basePrice}</Field>
           <Field label="Web address">
             <span className="font-mono text-[13px]">{product.slug}</span>
           </Field>
-          <Field label="Price">{product.basePrice}</Field>
-          <Field label="Compare-at price">
-            {product.compareAtPrice ?? "—"}
-          </Field>
           <Field label="Total stock">
             {tracked ? formatNumber(totalStock) : "Not tracked"}
-          </Field>
-          <Field label="Added">{formatTimestamp(product.createdAt)}</Field>
-          <Field label="Last changed">
-            {formatTimestamp(product.updatedAt)}
           </Field>
           <Field label="On order lines">
             {formatNumber(product.orderedCount)}

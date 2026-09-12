@@ -9,7 +9,6 @@ export interface UsageLogRow {
   readonly createdAt: Date;
   readonly inputTokens: bigint;
   readonly outputTokens: bigint;
-  readonly totalTokens: bigint;
   readonly estimatedCost: string | null;
   readonly status: "SUCCESS" | "ERROR" | "THROTTLED";
   readonly requestType: string;
@@ -61,8 +60,7 @@ function costToMicros(value: string | null): bigint {
   const padded = (fraction + "000000").slice(0, 6);
   const negative = whole.startsWith("-");
   const magnitude =
-    BigInt(whole.replace("-", "") || "0") * MICROS +
-    BigInt(padded || "0");
+    BigInt(whole.replace("-", "") || "0") * MICROS + BigInt(padded || "0");
 
   return negative ? -magnitude : magnitude;
 }
@@ -88,7 +86,10 @@ function emptyBuckets(
   windowStart: Date,
   days: number,
 ): Map<string, { inputTokens: number; outputTokens: number }> {
-  const buckets = new Map<string, { inputTokens: number; outputTokens: number }>();
+  const buckets = new Map<
+    string,
+    { inputTokens: number; outputTokens: number }
+  >();
 
   for (let index = 0; index <= days; index += 1) {
     const day = new Date(windowStart);
@@ -109,7 +110,6 @@ export function summarizeUsage(
 
   let inputTokens = 0;
   let outputTokens = 0;
-  let totalTokens = 0;
   let costMicros = BigInt(0);
   let successfulRequests = 0;
 
@@ -119,7 +119,6 @@ export function summarizeUsage(
 
     inputTokens += rowInput;
     outputTokens += rowOutput;
-    totalTokens += Number(row.totalTokens);
     costMicros += costToMicros(row.estimatedCost);
 
     if (row.status === "SUCCESS") successfulRequests += 1;
@@ -141,12 +140,12 @@ export function summarizeUsage(
     successfulRequests,
     failedRequests,
     errorRatePercent:
-      requests === 0
-        ? 0
-        : Math.round((failedRequests / requests) * 1000) / 10,
+      requests === 0 ? 0 : Math.round((failedRequests / requests) * 1000) / 10,
     inputTokens,
     outputTokens,
-    totalTokens,
+    // The ERD records input and output only; the total is their sum, not a
+    // third stored column that could disagree with them.
+    totalTokens: inputTokens + outputTokens,
     estimatedCost: microsToDecimal(costMicros),
     daily: [...buckets.entries()].map(([day, value]) => ({
       day,
@@ -158,9 +157,7 @@ export function summarizeUsage(
         requestType,
         requests: count,
         percent:
-          requests === 0
-            ? 0
-            : Math.round((count / requests) * 1000) / 10,
+          requests === 0 ? 0 : Math.round((count / requests) * 1000) / 10,
       }))
       .sort((a, b) => b.requests - a.requests),
   };

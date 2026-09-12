@@ -80,11 +80,10 @@ export async function loadTenantDashboard(
     statusGroups,
     salesRows,
     recentCustomers,
-    recentProducts,
   ] = await Promise.all([
     db.customer.count(),
     db.user.count(),
-    db.product.count(),
+    db.product.count({ where: { deletedAt: null } }),
     db.order.count(),
     db.order.aggregate({
       _sum: { total: true },
@@ -110,13 +109,8 @@ export async function loadTenantDashboard(
     }),
     db.customer.findMany({
       take: RECENT_LIMIT,
-      orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, createdAt: true },
-    }),
-    db.product.findMany({
-      take: RECENT_LIMIT,
-      orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, createdAt: true },
+      orderBy: { firstSeenAt: "desc" },
+      select: { id: true, name: true, firstSeenAt: true },
     }),
   ]);
 
@@ -137,11 +131,7 @@ export async function loadTenantDashboard(
       total: order.total.toString(),
       placedAt: order.placedAt.toISOString(),
     })),
-    recentActivity: buildActivity(
-      recentCustomers,
-      recentProducts,
-      recentOrderRows,
-    ),
+    recentActivity: buildActivity(recentCustomers, recentOrderRows),
     salesByDay: bucketByDay(salesRows, since),
     ordersByStatus: statusGroups.map((group) => ({
       status: group.status,
@@ -158,20 +148,17 @@ export async function loadTenantDashboard(
  * honest about being a digest of rows, not an audit trail.
  */
 function buildActivity(
-  customers: readonly { id: string; name: string; createdAt: Date }[],
-  products: readonly { id: string; name: string; createdAt: Date }[],
+  customers: readonly { id: string; name: string | null; firstSeenAt: Date }[],
   orders: readonly { id: string; orderNumber: string; placedAt: Date }[],
 ): readonly ActivityEntry[] {
+  // Products are absent on purpose: the new tenant ERD gives `products` no
+  // timestamp, so "recently added to the catalogue" is not a question this
+  // schema can answer, and inventing an answer is worse than omitting one.
   const entries: ActivityEntry[] = [
     ...customers.map((row) => ({
       id: `customer-${row.id}`,
-      description: `${row.name} was added as a customer`,
-      at: row.createdAt.toISOString(),
-    })),
-    ...products.map((row) => ({
-      id: `product-${row.id}`,
-      description: `${row.name} was added to the catalogue`,
-      at: row.createdAt.toISOString(),
+      description: `${row.name ?? "A WhatsApp contact"} was first seen`,
+      at: row.firstSeenAt.toISOString(),
     })),
     ...orders.map((row) => ({
       id: `order-${row.id}`,

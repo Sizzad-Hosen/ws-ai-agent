@@ -60,7 +60,6 @@ export async function loadTenantAiUsage(
         createdAt: true,
         inputTokens: true,
         outputTokens: true,
-        totalTokens: true,
         estimatedCost: true,
         status: true,
         requestType: true,
@@ -84,17 +83,14 @@ export async function loadTenantAiUsage(
   ]);
 
   const summary = summarizeUsage(
-    rows.map(
-      (row): UsageLogRow => ({
-        createdAt: row.createdAt,
-        inputTokens: row.inputTokens,
-        outputTokens: row.outputTokens,
-        totalTokens: row.totalTokens,
-        estimatedCost: row.estimatedCost?.toString() ?? null,
-        status: row.status,
-        requestType: row.requestType,
-      }),
-    ),
+    rows.map((row): UsageLogRow => ({
+      createdAt: row.createdAt,
+      inputTokens: row.inputTokens,
+      outputTokens: row.outputTokens,
+      estimatedCost: row.estimatedCost?.toString() ?? null,
+      status: row.status,
+      requestType: row.requestType,
+    })),
     since,
     days,
   );
@@ -103,7 +99,8 @@ export async function loadTenantAiUsage(
     ...summary,
     windowDays: days,
     recent: recent.map((row) => ({
-      id: row.id,
+      // BigInt does not survive the boundary into a Client Component.
+      id: row.id.toString(),
       requestType: row.requestType,
       inputTokens: Number(row.inputTokens),
       outputTokens: Number(row.outputTokens),

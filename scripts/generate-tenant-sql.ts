@@ -21,7 +21,7 @@ const OUTPUT = "src/server/tenancy/schema/001_initial.sql";
  * each incremental file is written with IF NOT EXISTS so applying it there is
  * a no-op that only records the version.
  */
-const VERSION = "2026.09.3";
+const VERSION = "2026.10.1";
 
 const HEADER = `-- GENERATED FILE — do not edit by hand.
 --

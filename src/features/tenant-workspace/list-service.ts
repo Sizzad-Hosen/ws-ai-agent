@@ -4,6 +4,7 @@ import type { TenantPrismaClient } from "@/server/tenancy/tenant-prisma";
 
 import type { ListParams } from "./pagination";
 import type {
+  TenantCustomerSource,
   TenantCustomerStatus,
   TenantOrderStatus,
   TenantProductStatus,
@@ -98,12 +99,17 @@ export async function listUsers(
 
 export interface TenantCustomerRow {
   readonly id: string;
-  readonly name: string;
+  /** Nullable now: a WhatsApp contact may never give a name. */
+  readonly name: string | null;
+  readonly profileName: string | null;
+  readonly waId: string;
   readonly email: string | null;
-  readonly phone: string | null;
+  readonly phone: string;
   readonly status: TenantCustomerStatus;
+  readonly source: TenantCustomerSource;
   readonly orders: number;
-  readonly createdAt: string;
+  readonly firstSeenAt: string;
+  readonly lastSeenAt: string;
 }
 
 export async function listCustomers(
@@ -116,6 +122,8 @@ export async function listCustomers(
           { name: { contains: params.search, mode: "insensitive" as const } },
           { email: { contains: params.search, mode: "insensitive" as const } },
           { phone: { contains: params.search } },
+          // The WhatsApp id is how a customer is found from a message.
+          { waId: { contains: params.search } },
         ],
       }
     : {};
@@ -126,14 +134,18 @@ export async function listCustomers(
         where,
         take: params.limit,
         skip: params.offset,
-        orderBy: { createdAt: "desc" },
+        orderBy: { lastSeenAt: "desc" },
         select: {
           id: true,
           name: true,
+          profileName: true,
+          waId: true,
           email: true,
           phone: true,
           status: true,
-          createdAt: true,
+          source: true,
+          firstSeenAt: true,
+          lastSeenAt: true,
           _count: { select: { orders: true } },
         },
       })
@@ -141,11 +153,15 @@ export async function listCustomers(
         rows.map((row) => ({
           id: row.id,
           name: row.name,
+          profileName: row.profileName,
+          waId: row.waId,
           email: row.email,
           phone: row.phone,
           status: row.status,
+          source: row.source,
           orders: row._count.orders,
-          createdAt: row.createdAt.toISOString(),
+          firstSeenAt: row.firstSeenAt.toISOString(),
+          lastSeenAt: row.lastSeenAt.toISOString(),
         })),
       ),
     db.customer.count({ where }),
@@ -171,14 +187,18 @@ export async function listProducts(
   db: TenantPrismaClient,
   params: ListParams,
 ): Promise<Page<TenantProductRow>> {
-  const where = params.search
-    ? {
-        OR: [
-          { name: { contains: params.search, mode: "insensitive" as const } },
-          { slug: { contains: params.search, mode: "insensitive" as const } },
-        ],
-      }
-    : {};
+  // Soft-deleted products are gone from the catalogue, not merely hidden.
+  const where = {
+    deletedAt: null,
+    ...(params.search
+      ? {
+          OR: [
+            { name: { contains: params.search, mode: "insensitive" as const } },
+            { slug: { contains: params.search, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
 
   return paginate(
     db.product
@@ -186,7 +206,7 @@ export async function listProducts(
         where,
         take: params.limit,
         skip: params.offset,
-        orderBy: { createdAt: "desc" },
+        orderBy: { name: "asc" },
         select: {
           id: true,
           name: true,
@@ -355,7 +375,6 @@ export async function listOrders(
 // ---------------------------------------------------------------- settings
 
 export interface TenantSettingRow {
-  readonly id: string;
   readonly settingKey: string;
   /** Serialised for display; `value` is arbitrary JSON. */
   readonly value: string;
@@ -367,11 +386,10 @@ export async function listSettings(
 ): Promise<readonly TenantSettingRow[]> {
   const rows = await db.storeSetting.findMany({
     orderBy: { settingKey: "asc" },
-    select: { id: true, settingKey: true, value: true, updatedAt: true },
+    select: { settingKey: true, value: true, updatedAt: true },
   });
 
   return rows.map((row) => ({
-    id: row.id,
     settingKey: row.settingKey,
     value:
       typeof row.value === "string" ? row.value : JSON.stringify(row.value),

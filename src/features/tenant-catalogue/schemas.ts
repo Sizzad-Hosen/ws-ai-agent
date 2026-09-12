@@ -51,11 +51,6 @@ export const categorySchema = z
       .min(1, "Enter a category name.")
       .max(150, "Name must be 150 characters or fewer."),
     slug: slugField(MAX_CATEGORY_SLUG),
-    description: z
-      .string()
-      .trim()
-      .max(2000, "Description must be 2000 characters or fewer.")
-      .transform((value) => (value === "" ? null : value)),
     // Empty string is the "Top level" option, which is a real choice rather
     // than a missing one.
     parentId: z
@@ -87,20 +82,11 @@ export const productSchema = z
       .transform((value) => (value === "" ? null : value)),
     status: z.enum(PRODUCT_STATUSES),
     basePrice: moneyString,
-    compareAtPrice: optionalMoney,
   })
-  .strict()
-  .refine(
-    (value) =>
-      value.compareAtPrice === null ||
-      Number(value.compareAtPrice) > Number(value.basePrice),
-    {
-      // A compare-at price at or below the selling price shows the customer a
-      // discount that is zero or negative.
-      message: "The compare-at price must be higher than the price.",
-      path: ["compareAtPrice"],
-    },
-  );
+  .strict();
+
+// The compare-at price moved to the variant, where the new ERD puts it: a
+// product with three sizes may have exactly one of them on offer.
 
 export type ProductInput = z.infer<typeof productSchema>;
 

@@ -117,9 +117,7 @@ export default async function OrderDetailPage({
                   {address.addressLine}
                 </p>
                 <p className="text-muted-foreground">
-                  {[address.city, address.region, address.postalCode]
-                    .filter(Boolean)
-                    .join(", ")}
+                  {[address.city, address.region].filter(Boolean).join(", ")}
                 </p>
               </div>
             )}
@@ -176,10 +174,7 @@ export default async function OrderDetailPage({
             {Number(order.discount) > 0 ? (
               <Total label="Discount" value={`−${order.discount}`} />
             ) : null}
-            <Total label="Delivery" value={order.shippingFee} />
-            {Number(order.tax) > 0 ? (
-              <Total label="Tax" value={order.tax} />
-            ) : null}
+            <Total label="Delivery" value={order.deliveryCharge} />
             <div className="border-border flex justify-between border-t pt-2 font-semibold">
               <dt>Total</dt>
               <dd className="tabular">{order.total}</dd>

@@ -19,7 +19,6 @@ function product(overrides: Record<string, unknown> = {}) {
     categoryId: "",
     status: "ACTIVE",
     basePrice: "890.00",
-    compareAtPrice: "",
     ...overrides,
   };
 }
@@ -45,7 +44,6 @@ describe("productSchema", () => {
     const parsed = productSchema.parse(product());
     expect(parsed.description).toBeNull();
     expect(parsed.categoryId).toBeNull();
-    expect(parsed.compareAtPrice).toBeNull();
   });
 
   it("keeps a category id when one is chosen", () => {
@@ -84,21 +82,12 @@ describe("productSchema", () => {
     );
   });
 
-  it("rejects a compare-at price at or below the price", () => {
-    // A discount of zero or less is not a discount, and showing one is worse
-    // than showing none.
+  it("rejects a compare-at price, which now belongs to the variant", () => {
+    // The new ERD moves it off the product: three sizes may have one on offer.
     expect(
-      productSchema.safeParse(product({ compareAtPrice: "890.00" })).success,
+      productSchema.safeParse({ ...product(), compareAtPrice: "990.00" })
+        .success,
     ).toBe(false);
-    expect(
-      productSchema.safeParse(product({ compareAtPrice: "800.00" })).success,
-    ).toBe(false);
-  });
-
-  it("accepts a compare-at price above the price", () => {
-    expect(
-      productSchema.safeParse(product({ compareAtPrice: "990.00" })).success,
-    ).toBe(true);
   });
 
   it("rejects a status outside the enum", () => {
@@ -138,7 +127,6 @@ describe("categorySchema", () => {
     const parsed = categorySchema.safeParse({
       name: "Pantry",
       slug: "pantry",
-      description: "",
       parentId: "",
       isActive: true,
     });
@@ -150,7 +138,6 @@ describe("categorySchema", () => {
     const parsed = categorySchema.parse({
       name: "Pantry",
       slug: "pantry",
-      description: "",
       parentId: "",
       isActive: true,
     });
@@ -158,11 +145,22 @@ describe("categorySchema", () => {
     expect(parsed.parentId).toBeNull();
   });
 
+  it("rejects a description, which the new ERD removed from the table", () => {
+    expect(
+      categorySchema.safeParse({
+        name: "Pantry",
+        slug: "pantry",
+        description: "anything",
+        parentId: "",
+        isActive: true,
+      }).success,
+    ).toBe(false);
+  });
+
   it("lowercases a slug typed in capitals", () => {
     const parsed = categorySchema.parse({
       name: "Pantry",
       slug: "PANTRY",
-      description: "",
       parentId: "",
       isActive: true,
     });

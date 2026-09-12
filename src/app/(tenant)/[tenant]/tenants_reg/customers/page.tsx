@@ -41,8 +41,8 @@ export default async function TenantCustomersPage({
         basePath={tenantHref(tenant.slug, "customers")}
         search={listParams.search}
         searchInputId="customers-search"
-        searchLabel="Search customers by name, email or phone"
-        searchPlaceholder="Search by name, email or phone…"
+        searchLabel="Search customers by name, email, phone or WhatsApp id"
+        searchPlaceholder="Search by name, email, phone or WhatsApp id…"
         total={page.total}
         limit={page.limit}
         offset={page.offset}
@@ -53,7 +53,7 @@ export default async function TenantCustomersPage({
             <TH>Contact</TH>
             <TH>Status</TH>
             <TH numeric>Orders</TH>
-            <TH numeric>Added</TH>
+            <TH numeric>Last seen</TH>
           </TR>
         }
       >
@@ -80,8 +80,11 @@ export default async function TenantCustomersPage({
                     href={`${tenantHref(tenant.slug, "customers")}/${row.id}`}
                     className="underline-offset-2 hover:underline"
                   >
-                    {row.name}
+                    {row.name ?? row.profileName ?? "Unnamed contact"}
                   </Link>
+                  <span className="text-muted-foreground block font-mono text-xs">
+                    {row.waId}
+                  </span>
                 </TD>
                 <TD>
                   {row.email ? (
@@ -109,7 +112,7 @@ export default async function TenantCustomersPage({
                   )}
                 </TD>
                 <TD numeric className="text-muted-foreground">
-                  {formatDate(row.createdAt)}
+                  {formatDate(row.lastSeenAt)}
                 </TD>
               </TR>
             ))

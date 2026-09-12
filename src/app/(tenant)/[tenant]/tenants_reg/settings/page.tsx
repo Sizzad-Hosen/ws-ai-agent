@@ -99,7 +99,7 @@ export default async function TenantSettingsPage({
                 </THead>
                 <TBody>
                   {other.map((row) => (
-                    <TR key={row.id}>
+                    <TR key={row.settingKey}>
                       <TD mono className="font-medium">
                         {row.settingKey}
                       </TD>

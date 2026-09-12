@@ -58,7 +58,12 @@ async function main(): Promise<void> {
       },
     });
     const customerA = await dbA.customer.create({
-      data: { name: "Tenant A Customer", email: "a@example.invalid" },
+      data: {
+        waId: "8800000000001",
+        name: "Tenant A Customer",
+        phone: "+8800000000001",
+        email: "a@example.invalid",
+      },
     });
 
     check(

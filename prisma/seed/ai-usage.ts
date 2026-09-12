@@ -1,14 +1,14 @@
 /**
- * AI usage history inside the seeded tenant's own database.
+ * Conversations and AI usage history inside the seeded tenant's database.
  *
  * The AI usage screen is empty without it, and an empty screen cannot be
  * reviewed — the same reason `seedTenant` exists. Every row goes into the
  * tenant database through `resolveTenant`, never into the master: per-call AI
  * usage is operational tenant data, and the master holds only rollups.
  *
- * `ai_usage_logs.provider_id` and `.model_id` are bare UUIDs pointing at the
- * master `ai_providers` and `ai_models` rows, because Postgres cannot express a
- * cross-database foreign key. They are passed in from `seedAi` so they resolve.
+ * `ai_usage_logs.model_id` is a bare uuid pointing at the master `ai_models`
+ * table, because Postgres cannot express a cross-database foreign key. It is
+ * passed in from `seedAi` so it resolves.
  *
  * Idempotent by guard rather than by upsert: `ai_usage_logs` has no natural
  * unique key to converge on, so a database that already has usage is left
@@ -32,11 +32,22 @@ const REQUEST_TYPES = [
   "product_search",
 ] as const;
 
-const CONTACTS = [
-  { name: "Farhana Akter", phone: "+8801711000101" },
-  { name: "Rakib Hasan", phone: "+8801711000102" },
-  { name: "Nusrat Jahan", phone: "+8801711000103" },
+/**
+ * The WhatsApp identity is now the customer's own column, so a conversation
+ * hangs off the customer directly. `wa_id` is what an inbound message carries.
+ */
+const CUSTOMERS = [
+  { waId: "8801711000101", name: "Farhana Akter", phone: "+8801711000101" },
+  { waId: "8801711000102", name: "Rakib Hasan", phone: "+8801711000102" },
+  { waId: "8801711000103", name: "Nusrat Jahan", phone: "+8801711000103" },
 ] as const;
+
+/**
+ * The WhatsApp account a conversation belongs to lives in the master database,
+ * so this column is a bare uuid with no foreign key. A fixed value stands in
+ * until a tenant actually connects a number.
+ */
+const PLACEHOLDER_WHATSAPP_ACCOUNT_ID = "00000000-0000-4000-8000-000000000001";
 
 export interface SeededAiUsage {
   readonly logs: number;
@@ -69,24 +80,30 @@ export async function seedAiUsage(
   // calls is hung off a real conversation.
   const conversationIds: string[] = [];
 
-  for (const person of CONTACTS) {
-    const contact = await db.contact.create({
-      data: {
-        customerName: person.name,
-        phoneNumber: person.phone,
-        displayPhoneNumber: person.phone,
+  for (const person of CUSTOMERS) {
+    const customer = await db.customer.upsert({
+      where: { waId: person.waId },
+      update: { name: person.name, phone: person.phone },
+      create: {
+        waId: person.waId,
+        name: person.name,
+        profileName: person.name,
+        phone: person.phone,
+        source: "WHATSAPP",
         status: "ACTIVE",
-        createdAt: daysAgo(HISTORY_DAYS),
+        firstSeenAt: daysAgo(HISTORY_DAYS),
+        lastSeenAt: daysAgo(1),
       },
       select: { id: true },
     });
 
     const conversation = await db.conversation.create({
       data: {
-        contactId: contact.id,
+        customerId: customer.id,
+        whatsappAccountId: PLACEHOLDER_WHATSAPP_ACCOUNT_ID,
+        state: "BROWSING",
         status: "OPEN",
         lastMessageAt: daysAgo(1),
-        createdAt: daysAgo(HISTORY_DAYS),
       },
       select: { id: true },
     });
@@ -97,21 +114,24 @@ export async function seedAiUsage(
       data: [
         {
           conversationId: conversation.id,
-          direction: "INBOUND",
+          providerMessageId: `wamid.seed.${person.waId}.in`,
+          direction: "IN",
           senderType: "CUSTOMER",
-          content: "Do you have this in stock?",
           messageType: "TEXT",
-          status: "DELIVERED",
-          createdAt: daysAgo(2),
+          content: "Do you have this in stock?",
+          sentAt: daysAgo(2),
+          deliveredAt: daysAgo(2),
         },
         {
           conversationId: conversation.id,
-          direction: "OUTBOUND",
+          providerMessageId: `wamid.seed.${person.waId}.out`,
+          direction: "OUT",
           senderType: "AI",
-          content: "Yes, it is in stock. Would you like to order it?",
           messageType: "TEXT",
-          status: "READ",
-          createdAt: daysAgo(2),
+          content: "Yes, it is in stock. Would you like to order it?",
+          sentAt: daysAgo(2),
+          deliveredAt: daysAgo(2),
+          readAt: daysAgo(2),
         },
       ],
     });
@@ -126,12 +146,10 @@ export async function seedAiUsage(
 
 interface UsageRow {
   readonly conversationId: string;
-  readonly providerId: string;
   readonly modelId: string;
   readonly requestType: string;
   readonly inputTokens: bigint;
   readonly outputTokens: bigint;
-  readonly totalTokens: bigint;
   readonly estimatedCost: string;
   readonly status: "SUCCESS" | "ERROR" | "THROTTLED";
   readonly createdAt: Date;
@@ -180,14 +198,10 @@ function buildUsageRows(
         conversationId:
           conversationIds[counter % conversationIds.length] ??
           conversationIds[0]!,
-        providerId: catalogue.providerId,
-        modelId: embedding
-          ? catalogue.embeddingModelId
-          : catalogue.chatModelId,
+        modelId: embedding ? catalogue.embeddingModelId : catalogue.chatModelId,
         requestType,
         inputTokens,
         outputTokens,
-        totalTokens: inputTokens + outputTokens,
         estimatedCost: estimateCost(inputTokens, outputTokens, embedding),
         status,
         createdAt,
@@ -215,6 +229,6 @@ function estimateCost(
     (Number(inputTokens) / 1_000_000) * inputRate +
     (Number(outputTokens) / 1_000_000) * outputRate;
 
-  // `ai_usage_logs.estimated_cost` is Decimal(12,6).
-  return cost.toFixed(6);
+  // `ai_usage_logs.estimated_cost` is Decimal(12,4) in the new ERD.
+  return cost.toFixed(4);
 }

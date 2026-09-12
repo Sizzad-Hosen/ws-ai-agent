@@ -20,6 +20,7 @@ import { TenantShell } from "@/features/tenant-dashboard/components/tenant-shell
 import { tenantHref } from "@/features/tenant-dashboard/routes";
 import { getCustomer } from "@/features/tenant-workspace/detail-service";
 import {
+  CONVERSATION_STATE_LABELS,
   CUSTOMER_STATUS_LABELS,
   CUSTOMER_STATUS_TONES,
   ORDER_STATUS_LABELS,
@@ -49,8 +50,8 @@ export default async function CustomerDetailPage({
     <TenantShell
       tenant={tenant}
       user={user}
-      title={customer.name}
-      description={`A customer since ${formatDate(customer.createdAt)}.`}
+      title={customer.name ?? customer.profileName ?? "Unnamed contact"}
+      description={`First seen ${formatDate(customer.firstSeenAt)}, last seen ${formatDate(customer.lastSeenAt)}.`}
     >
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Orders" value={formatNumber(customer.orderCount)} />
@@ -64,15 +65,22 @@ export default async function CustomerDetailPage({
           value={formatNumber(customer.addresses.length)}
         />
         <MetricCard
-          label="WhatsApp contacts"
-          value={formatNumber(customer.contacts.length)}
+          label="Conversations"
+          value={formatNumber(customer.conversations.length)}
         />
       </div>
 
       <Card>
         <CardHeader title="Contact details" />
         <CardBody className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Name">{customer.name}</Field>
+          <Field label="Name">
+            {customer.name ?? (
+              <span className="text-muted-foreground">Not given</span>
+            )}
+          </Field>
+          <Field label="WhatsApp id">
+            <span className="font-mono text-[13px]">{customer.waId}</span>
+          </Field>
           <Field label="Status">
             <Badge tone={CUSTOMER_STATUS_TONES[customer.status]}>
               {CUSTOMER_STATUS_LABELS[customer.status]}
@@ -141,9 +149,7 @@ export default async function CustomerDetailPage({
                     {address.addressLine}
                   </p>
                   <p className="text-muted-foreground">
-                    {[address.city, address.region, address.postalCode]
-                      .filter(Boolean)
-                      .join(", ")}
+                    {[address.city, address.region].filter(Boolean).join(", ")}
                   </p>
                 </li>
               ))}
@@ -204,32 +210,42 @@ export default async function CustomerDetailPage({
 
       <Card>
         <CardHeader
-          title="WhatsApp contacts"
-          description="The numbers this customer has messaged from."
+          title="Conversations"
+          description="WhatsApp threads with this customer."
         />
         <CardBody>
-          {customer.contacts.length === 0 ? (
+          {customer.conversations.length === 0 ? (
             <EmptyState
               icon={MessageSquare}
-              title="No WhatsApp contact"
-              description="A contact appears once this customer messages the business."
+              title="No conversation yet"
+              description="A thread appears once this customer messages the business."
             />
           ) : (
             <ul className="space-y-2 text-sm">
-              {customer.contacts.map((contact) => (
+              {customer.conversations.map((conversation) => (
                 <li
-                  key={contact.id}
+                  key={conversation.id}
                   className="border-border flex flex-wrap items-center gap-3 rounded-md border p-3"
                 >
-                  <span className="font-mono">{contact.phoneNumber}</span>
                   <Badge
-                    tone={contact.status === "ACTIVE" ? "success" : "neutral"}
+                    tone={
+                      conversation.status === "OPEN" ? "success" : "neutral"
+                    }
                   >
-                    {contact.status}
+                    {conversation.status}
                   </Badge>
+                  <span>{CONVERSATION_STATE_LABELS[conversation.state]}</span>
+                  {conversation.aiPaused ? (
+                    <Badge tone="warning">AI paused</Badge>
+                  ) : null}
                   <span className="text-muted-foreground text-xs">
-                    {formatNumber(contact.conversations)} conversation
-                    {contact.conversations === 1 ? "" : "s"}
+                    {formatNumber(conversation.messages)} message
+                    {conversation.messages === 1 ? "" : "s"}
+                  </span>
+                  <span className="text-muted-foreground ml-auto text-xs">
+                    {conversation.lastMessageAt
+                      ? formatTimestamp(conversation.lastMessageAt)
+                      : "No messages"}
                   </span>
                 </li>
               ))}

@@ -19,8 +19,7 @@ export interface TenantMigration {
 }
 
 export const TENANT_MIGRATIONS: readonly TenantMigration[] = [
-  { version: "2026.09.3", file: "001_initial.sql" },
-  { version: "2026.09.4", file: "002_user_avatar.sql" },
+  { version: "2026.10.1", file: "001_initial.sql" },
 ];
 
 /** The baseline the provisioner applies to an empty database. */

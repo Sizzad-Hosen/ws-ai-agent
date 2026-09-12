@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { saveCategoryAction } from "@/features/tenant-catalogue/actions/category-actions";
 import {
   deriveSlug,
@@ -63,7 +62,6 @@ export function CategoryForm({
       const result = await saveCategoryAction(slug, category?.id ?? null, {
         name: String(form.get("name") ?? ""),
         slug: String(form.get("slug") ?? ""),
-        description: String(form.get("description") ?? ""),
         parentId: String(form.get("parentId") ?? ""),
         isActive: form.get("isActive") !== null,
       });
@@ -136,19 +134,6 @@ export function CategoryForm({
               label: option.name,
             })),
           ]}
-        />
-      </FormField>
-
-      <FormField
-        htmlFor="description"
-        label="Description"
-        error={fieldErrors.description?.[0]}
-      >
-        <Textarea
-          id="description"
-          name="description"
-          defaultValue={category?.description ?? ""}
-          maxLength={2000}
         />
       </FormField>
 

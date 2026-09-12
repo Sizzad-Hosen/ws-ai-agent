@@ -83,7 +83,6 @@ export async function createProductAction(
           productId: created.id,
           sku: parsedVariant.data.sku,
           price: parsed.data.basePrice,
-          compareAtPrice: parsed.data.compareAtPrice,
           isActive: true,
         },
         select: { id: true },

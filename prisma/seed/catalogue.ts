@@ -8,9 +8,8 @@
  * status the list renders differently.
  *
  * Idempotent. Categories and products converge on their unique `slug`,
- * variants on `sku` and orders on `order_number`, so a second run changes
- * nothing. Customers have no unique column in the tenant schema, so they are
- * looked up by email first — the same approach `seedAi` takes for providers.
+ * variants on `sku`, orders on `order_number` and customers on `wa_id`, so a
+ * second run changes nothing.
  */
 import { daysAgo } from "./helpers";
 
@@ -80,26 +79,36 @@ const PRODUCTS = [
   },
 ] as const;
 
+/**
+ * `wa_id` is the WhatsApp identity and the unique key, so these converge on it
+ * rather than on the email — which is nullable and not unique in the new ERD.
+ * The first three match the customers `seedAiUsage` creates, so the two seeds
+ * describe the same people rather than duplicating them.
+ */
 const CUSTOMERS = [
   {
+    waId: "8801711000101",
     email: "farhana.akter@example.com",
     name: "Farhana Akter",
     phone: "+8801711000101",
     status: "ACTIVE",
   },
   {
+    waId: "8801711000102",
     email: "rakib.hasan@example.com",
     name: "Rakib Hasan",
     phone: "+8801711000102",
     status: "ACTIVE",
   },
   {
+    waId: "8801711000103",
     email: "nusrat.jahan@example.com",
     name: "Nusrat Jahan",
     phone: "+8801711000103",
     status: "ACTIVE",
   },
   {
+    waId: "8801711000104",
     email: "imran.kabir@example.com",
     name: "Imran Kabir",
     phone: "+8801711000104",
@@ -151,7 +160,7 @@ const ORDERS = [
 ] as const;
 
 /** Flat 60.00 delivery, so the order totals on screen are arithmetic anyone can check. */
-const SHIPPING_FEE = 60;
+const DELIVERY_CHARGE = 60;
 
 export interface SeededCatalogue {
   readonly categories: number;
@@ -263,29 +272,25 @@ async function seedCustomers(
   const ids = new Map<string, string>();
 
   for (const customer of CUSTOMERS) {
-    // `customers.email` is nullable and not unique in the tenant schema, so
-    // this cannot upsert on it.
-    const existing = await db.customer.findFirst({
-      where: { email: customer.email },
+    const row = await db.customer.upsert({
+      where: { waId: customer.waId },
+      update: {
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        status: customer.status,
+      },
+      create: {
+        waId: customer.waId,
+        name: customer.name,
+        profileName: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        source: "WHATSAPP",
+        status: customer.status,
+      },
       select: { id: true },
     });
-
-    const fields = {
-      name: customer.name,
-      phone: customer.phone,
-      status: customer.status,
-    };
-
-    const row = existing
-      ? await db.customer.update({
-          where: { id: existing.id },
-          data: fields,
-          select: { id: true },
-        })
-      : await db.customer.create({
-          data: { email: customer.email, ...fields },
-          select: { id: true },
-        });
 
     ids.set(customer.email, row.id);
   }
@@ -314,7 +319,7 @@ async function seedOrders(
 
     const unitPrice = Number(product.basePrice);
     const subtotal = unitPrice * order.quantity;
-    const total = subtotal + SHIPPING_FEE;
+    const total = subtotal + DELIVERY_CHARGE;
     const placedAt = daysAgo(order.daysAgo);
 
     await db.order.create({
@@ -322,8 +327,9 @@ async function seedOrders(
         orderNumber: order.number,
         customerId,
         status: order.status,
+        source: "WHATSAPP",
         subtotal: subtotal.toFixed(2),
-        shippingFee: SHIPPING_FEE.toFixed(2),
+        deliveryCharge: DELIVERY_CHARGE.toFixed(2),
         total: total.toFixed(2),
         placedAt,
         items: {
