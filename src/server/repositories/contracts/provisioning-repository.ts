@@ -92,6 +92,19 @@ export interface ProvisioningRepository {
   findDatabasePointers(
     tenantId: string,
   ): Promise<DatabaseConnectionPointers | null>;
+  /**
+   * Moves a tenant from PROVISIONING to ACTIVE once its database is ready.
+   *
+   * Approval settles the verdict and leaves the workspace PROVISIONING, which
+   * is correct: it is not servable until the database exists. Nothing then
+   * moved it on, so every tenant approved through the real flow stayed
+   * PROVISIONING forever and resolveTenant refused it as inactive. This is
+   * the step that was missing.
+   *
+   * Only ever from PROVISIONING: a suspended or archived workspace must not be
+   * reopened by a database retry.
+   */
+  markTenantActive(tenantId: string): Promise<boolean>;
 }
 
 /** Pointers, never credentials (S-03). */

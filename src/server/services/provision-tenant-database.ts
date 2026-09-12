@@ -80,6 +80,11 @@ export async function provisionDatabaseForTenant(
     TENANT_SCHEMA_VERSION,
   );
 
+  // The database exists, so the workspace is servable. Without this the tenant
+  // stays PROVISIONING and resolveTenant refuses it as inactive — approved,
+  // provisioned, and unreachable by its own staff.
+  await repositories.provisioning.markTenantActive(tenantId);
+
   const owner = await createOwnerUser(tenantId);
 
   return {

@@ -299,6 +299,17 @@ export class PrismaProvisioningRepository implements ProvisioningRepository {
     });
   }
 
+  async markTenantActive(tenantId: string): Promise<boolean> {
+    // Guarded by the where clause rather than by a prior read: two concurrent
+    // retries must not race, and a suspended workspace must not be reopened.
+    const result = await prisma.tenant.updateMany({
+      where: { id: tenantId, status: "PROVISIONING" },
+      data: { status: "ACTIVE", provisioningError: null },
+    });
+
+    return result.count > 0;
+  }
+
   async findDatabaseTarget(tenantId: string): Promise<DatabaseTarget | null> {
     const row = await prisma.tenantDatabase.findUnique({
       where: { tenantId },
