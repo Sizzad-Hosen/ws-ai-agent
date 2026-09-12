@@ -129,7 +129,7 @@ For local work, point it at a mail catcher, which accepts everything and
 delivers nothing:
 
 ```bash
-winget install ChangemakerStudios.PapercutSMTP   # port 25, own window
+winget install ChangemakerStudios.Papercut-SMTP   # port 25, own window
 docker run -p 1025:1025 -p 8025:8025 axllent/mailpit   # UI on :8025
 ```
 
