@@ -19,7 +19,7 @@ import type { PaginatedResult } from "@/types/repository";
  *
  * WhatsApp account health, the message log, AI usage rollups and the platform
  * activity feed have no tables anywhere in
- * `docs/db/SaaS Master DB — BO + Public Site.png` — see §2.2 / §2.3 and
+ * `docs/db/Ordivex Master DB Design.png` — see §2.2 / §2.3 and
  * decisions D-10 / D-11 in docs/IMPLEMENTATION_PLAN.md.
  *
  * They report *absence*, never zero: a screen must be able to say "there is no

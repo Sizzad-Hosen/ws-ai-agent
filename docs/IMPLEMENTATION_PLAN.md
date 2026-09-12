@@ -1,8 +1,8 @@
 # Implementation Plan — BO (Back Office) Site
 
 **Status:** Draft for review. No application code or schema has been changed.
-**Scope of this document:** the Back-Office admin console (`docs/uiux/bo-site/`), backed by the master database (`docs/db/SaaS Master DB — BO + Public Site.png`).
-**Source of truth for the database:** `docs/db/SaaS Master DB — BO + Public Site.png`. Nothing in this plan changes that schema. Section 2 raises the problems found in it and waits for decisions.
+**Scope of this document:** the Back-Office admin console (`docs/uiux/bo-site/`), backed by the master database (`docs/db/Ordivex Master DB Design.png`).
+**Source of truth for the database:** `docs/db/Ordivex Master DB Design.png`. Nothing in this plan changes that schema. Section 2 raises the problems found in it and waits for decisions.
 
 ---
 
@@ -14,7 +14,7 @@ The brief refers to a PRD, System Design, Database Design, API Design and UI/UX 
 | ---------------------------- | ---------------------------------------- | ----------------------------------------------- |
 | PRD                          | **No**                                   | —                                               |
 | System / architecture design | **No**                                   | —                                               |
-| Database design              | Yes (ERD image only, no data dictionary) | `docs/db/SaaS Master DB — BO + Public Site.png` |
+| Database design              | Yes (ERD image only, no data dictionary) | `docs/db/Ordivex Master DB Design.png` |
 | API design                   | **No**                                   | —                                               |
 | UI/UX — BO site              | Yes (12 screenshots + style guide)       | `docs/uiux/bo-site/`                            |
 | UI/UX — public site          | Yes (6 screenshots + style guide)        | `docs/uiux/public-site/`                        |

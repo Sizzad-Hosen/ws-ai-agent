@@ -20,7 +20,7 @@ environment values are parsed at the server boundary with Zod.
 
 ## Databases
 
-Two ERDs, two schemas. `docs/db/SaaS Master DB — BO + Public Site.png` is the
+Two ERDs, two schemas. `docs/db/Ordivex Master DB Design.png` is the
 platform's own database — administrators, tenants, plans, registrations,
 public-site content — and is implemented in `prisma/schema.prisma`.
 `docs/db/SaaS Tenant DB — Business + Storefront + AI + WhatsApp.png` is what
