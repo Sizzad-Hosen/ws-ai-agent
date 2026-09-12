@@ -7,9 +7,13 @@
  * runs this file.
  *
  * It seeds configuration — the administrator, the plan catalogue, AI providers,
- * feature flags and platform settings — plus two fixtures the back office
- * cannot be reviewed without: one approved tenant and one submitted
- * registration. Nothing else is invented.
+ * feature flags and platform settings — plus the fixtures the screens cannot be
+ * reviewed without: one approved tenant, its physical database, AI usage
+ * history inside that database, and one submitted registration.
+ *
+ * The tenant database step is not optional decoration. Without it the
+ * `tenant_databases` row points at a database that was never created, so
+ * `resolveTenant` fails and the tenant workspace cannot be opened.
  *
  * The seeded registration stays unapproved on purpose. Approving it is the
  * manual walkthrough, and it is the only path that creates a second tenant.
@@ -17,15 +21,18 @@
 import { prisma } from "./seed/client";
 import { seedAdmin } from "./seed/admin";
 import { seedAi } from "./seed/ai";
+import { seedAiUsage } from "./seed/ai-usage";
+import { seedCatalogue } from "./seed/catalogue";
 import { seedPlans } from "./seed/plans";
 import { seedPlatform } from "./seed/platform";
 import { seedRegistration } from "./seed/registrations";
 import { seedTenant } from "./seed/tenants";
+import { seedTenantDatabase } from "./seed/tenant-database";
 
 async function main(): Promise<void> {
   const admin = await seedAdmin();
   const plans = await seedPlans();
-  await seedAi();
+  const aiCatalogue = await seedAi();
   const platform = await seedPlatform();
 
   const business = plans["business"];
@@ -34,8 +41,19 @@ async function main(): Promise<void> {
     throw new Error("The plan catalogue did not seed the expected codes.");
   }
 
-  await seedTenant(business, admin.id);
+  const tenant = await seedTenant(business, admin.id);
   await seedRegistration(starter);
+
+  // The tenant's own database, and the AI usage history inside it. Until this
+  // runs, `tenant_databases` points at a database that does not exist and the
+  // workspace cannot be opened at all.
+  const database = await seedTenantDatabase(tenant.id);
+  const usage = database.ready
+    ? await seedAiUsage("northwind", aiCatalogue)
+    : { logs: 0, conversations: 0 };
+  const catalogue = database.ready
+    ? await seedCatalogue("northwind")
+    : { categories: 0, products: 0, customers: 0, orders: 0 };
 
   // Counted rather than quoted, so the summary cannot drift from the seed.
   console.info(
@@ -45,6 +63,22 @@ async function main(): Promise<void> {
       "database, owner and active subscription, and 1 submitted registration " +
       "with 3 pending checks.",
   );
+
+  if (database.ready) {
+    console.info(
+      `Tenant database ${database.databaseName} is ready with ` +
+        `${usage.conversations} conversations, ${usage.logs} AI usage rows, ` +
+        `${catalogue.categories} categories, ${catalogue.products} products, ` +
+        `${catalogue.customers} customers and ${catalogue.orders} orders.`,
+    );
+
+    if (database.ownerEmail && database.ownerPassword) {
+      console.info(
+        `Sign in at /northwind/tenants_reg/login as ${database.ownerEmail} ` +
+          `with the password ${database.ownerPassword}.`,
+      );
+    }
+  }
 }
 
 main()

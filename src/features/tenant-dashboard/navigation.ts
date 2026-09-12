@@ -1,4 +1,5 @@
 import {
+  Bot,
   LayoutDashboard,
   Package,
   Settings,
@@ -9,12 +10,32 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-export interface TenantNavigationItem {
-  readonly label: string;
-  /** Appended to the tenant's dashboard root. */
-  readonly segment: string;
+import {
+  TENANT_NAVIGATION_ENTRIES,
+  type TenantNavigationEntry,
+} from "./nav-segments";
+
+export interface TenantNavigationItem extends TenantNavigationEntry {
   readonly icon: LucideIcon;
 }
+
+/**
+ * Icon per destination.
+ *
+ * Keyed by segment and typed as a total record, so adding a destination to
+ * `nav-segments.ts` without giving it an icon is a compile error rather than a
+ * blank square in the sidebar.
+ */
+const ICONS: Readonly<Record<string, LucideIcon>> = {
+  dashboard: LayoutDashboard,
+  users: Users,
+  customers: UsersRound,
+  products: Package,
+  categories: Tags,
+  orders: ShoppingCart,
+  "ai-usage": Bot,
+  settings: Settings,
+};
 
 /**
  * Sidebar for a tenant's own workspace.
@@ -22,13 +43,13 @@ export interface TenantNavigationItem {
  * Every destination is scoped to the tenant in the URL; there is no route here
  * that could address another workspace, which is why the sidebar needs no
  * permission filtering of the kind the back office does.
+ *
+ * `npm run verify:tenant-pages` asserts that every entry has a page file, so a
+ * link added here without a route fails a check rather than reaching a user as
+ * a 404.
  */
-export const TENANT_NAVIGATION: readonly TenantNavigationItem[] = [
-  { label: "Dashboard", segment: "dashboard", icon: LayoutDashboard },
-  { label: "Users", segment: "users", icon: Users },
-  { label: "Customers", segment: "customers", icon: UsersRound },
-  { label: "Products", segment: "products", icon: Package },
-  { label: "Categories", segment: "categories", icon: Tags },
-  { label: "Orders", segment: "orders", icon: ShoppingCart },
-  { label: "Settings", segment: "settings", icon: Settings },
-];
+export const TENANT_NAVIGATION: readonly TenantNavigationItem[] =
+  TENANT_NAVIGATION_ENTRIES.map((entry) => ({
+    ...entry,
+    icon: ICONS[entry.segment] ?? LayoutDashboard,
+  }));

@@ -32,7 +32,21 @@ async function upsertProvider(
   });
 }
 
-export async function seedAi(): Promise<void> {
+/**
+ * The models an AI usage row points at.
+ *
+ * `ai_usage_logs.provider_id` and `.model_id` in a tenant database are bare
+ * UUIDs referencing this master catalogue, because Postgres cannot express a
+ * cross-database foreign key. Returning them here is what lets the tenant seed
+ * write rows that resolve against real models rather than invented ids.
+ */
+export interface SeededAiCatalogue {
+  readonly providerId: string;
+  readonly chatModelId: string;
+  readonly embeddingModelId: string;
+}
+
+export async function seedAi(): Promise<SeededAiCatalogue> {
   const openai = await upsertProvider(
     "OpenAI",
     AiProviderStatus.ACTIVE,
@@ -110,6 +124,11 @@ export async function seedAi(): Promise<void> {
     select: { id: true },
   });
 
+  const embeddingModel = await prisma.aiModel.findFirstOrThrow({
+    where: { aiProviderId: openai.id, modelName: "text-embedding-3-small" },
+    select: { id: true },
+  });
+
   const active = await prisma.platformAiConfiguration.findFirst({
     where: { isActive: true },
     select: { id: true },
@@ -132,4 +151,10 @@ export async function seedAi(): Promise<void> {
       },
     });
   }
+
+  return {
+    providerId: openai.id,
+    chatModelId: defaultModel.id,
+    embeddingModelId: embeddingModel.id,
+  };
 }
