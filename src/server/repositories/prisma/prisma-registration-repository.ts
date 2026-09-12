@@ -6,6 +6,7 @@ import type {
 } from "@/features/registrations/types";
 import { prisma } from "@/server/db/prisma";
 import type {
+  CreatedRegistration,
   NewRegistration,
   RecordCheckOutcome,
   RegistrationCheckDecision,
@@ -132,12 +133,12 @@ export class PrismaRegistrationRepository implements RegistrationRepository {
     return existing !== null;
   }
 
-  async create(values: NewRegistration): Promise<string> {
+  async create(values: NewRegistration): Promise<CreatedRegistration> {
     const code = `REG-${Date.now().toString(36).toUpperCase()}`;
 
     // The registration and its checklist are one unit: a registration with no
     // checks would reach the review queue with nothing to action.
-    await prisma.tenantRegistration.create({
+    const created = await prisma.tenantRegistration.create({
       data: {
         ...values,
         registrationCode: code,
@@ -150,9 +151,10 @@ export class PrismaRegistrationRepository implements RegistrationRepository {
           ],
         },
       },
+      select: { id: true },
     });
 
-    return code;
+    return { id: created.id, registrationCode: code };
   }
 
   async recordCheck(

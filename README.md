@@ -72,7 +72,11 @@ URL is the path form whenever `NEXT_PUBLIC_APP_URL` is set.
 ## Tenant lifecycle
 
 1. A visitor applies at `/register`. A `tenant_registrations` row is written
-   `PENDING_REVIEW` with a three-item review checklist.
+   `PENDING_REVIEW` with a three-item review checklist. Two emails follow: a
+   receipt for the applicant carrying their reference, and an alert to
+   `EMAIL_REVIEW_INBOX` linking straight to the registration. Both are sent
+   after the response, so a mail server nobody can reach never turns a
+   registration that committed into one that looks failed.
 2. The application appears **on the tenants screen** at `/bo/tenants`, marked
    Pending Review, alongside the tenants it may become — and in the queue at
    `/bo/registrations`.
@@ -100,6 +104,44 @@ SQL — the same open question D-03 records for the master schema.
 
 `npm run verify:lifecycle` exercises all of it against the real database and
 removes everything it creates, the tenant database included.
+
+## Email
+
+`src/server/email` is the whole of it: `templates/` renders, `transport.ts`
+connects, `send-email.ts` sends and never throws. Callers get a result to log
+rather than an exception to handle, because email announces work that has
+already been committed — a registration exists whether or not its receipt is
+delivered.
+
+Templates are pure functions of their facts. They read no environment and no
+clock; URLs and timestamps are passed in, so a rendered message cannot vary by
+machine and a test can assert on its exact output. Every interpolated value is
+HTML-escaped: a business name arrives from an unauthenticated public form and
+is read in an administrator's mail client, so it is treated as hostile. One
+`EmailContent` renders both the HTML and the plain-text part, so the two cannot
+drift apart.
+
+**An empty `SMTP_HOST` disables sending.** Messages are rendered and logged but
+never delivered. That is the default in `.env.example` and what CI gets, because
+the failure mode of guessing a host is a test run emailing a real person.
+
+For local work, point it at a mail catcher, which accepts everything and
+delivers nothing:
+
+```bash
+winget install ChangemakerStudios.PapercutSMTP   # port 25, own window
+docker run -p 1025:1025 -p 8025:8025 axllent/mailpit   # UI on :8025
+```
+
+Then set `SMTP_HOST=127.0.0.1` and the matching `SMTP_PORT` in `.env`.
+
+`npm run verify:email` proves the pipeline without needing any of that: it
+starts a throwaway SMTP server, sends both registration emails through the real
+transport, and asserts on what arrives — the recipients, the reference in the
+subject, the reviewer's deep link, that the applicant is sent no link into the
+back office, and that a tag in a business name arrives escaped. If a catcher
+_is_ configured it then delivers the same pair there to be read by eye, and
+says so plainly when nothing is listening.
 
 ## Architecture
 

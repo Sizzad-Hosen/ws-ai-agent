@@ -26,6 +26,36 @@ const serverEnvSchema = z.object({
   AVATAR_UPLOAD_DIR: z.string().trim().default("public/uploads/avatars"),
   /** URL prefix the directory above is served under. */
   AVATAR_URL_BASE: z.string().trim().default("/uploads/avatars"),
+  /**
+   * SMTP server for outgoing mail.
+   *
+   * Empty turns sending off altogether: messages are rendered and logged but
+   * never delivered. That is the right default for CI and for a checkout that
+   * has configured nothing, because the alternative — a hostname that happens
+   * to resolve — is how a test run emails a real person.
+   *
+   * Locally this points at a catcher such as Papercut, MailHog or Mailpit,
+   * which accepts every message and delivers none of them.
+   */
+  SMTP_HOST: z.string().trim().default(""),
+  /** Papercut listens on 25; MailHog and Mailpit both use 1025. */
+  SMTP_PORT: z.coerce.number().int().min(1).max(65_535).default(25),
+  /** TLS from the first byte, as port 465 expects. Local catchers want it off. */
+  SMTP_SECURE: z.stringbool().default(false),
+  /** Both empty against a local catcher, which authenticates nobody. */
+  SMTP_USER: z.string().trim().default(""),
+  SMTP_PASSWORD: z.string().default(""),
+  /** Envelope sender. A domain we control in production, anything locally. */
+  EMAIL_FROM: z.string().trim().default("Ordivex <no-reply@ordivex.local>"),
+  /**
+   * Where the back office hears about a new application. A shared review inbox
+   * rather than a person, so nothing is missed while someone is on leave.
+   */
+  EMAIL_REVIEW_INBOX: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .default("registrations@ordivex.local"),
 });
 
 export const env = serverEnvSchema.parse({
@@ -35,4 +65,11 @@ export const env = serverEnvSchema.parse({
   TENANT_ROOT_DOMAIN: process.env.TENANT_ROOT_DOMAIN,
   AVATAR_UPLOAD_DIR: process.env.AVATAR_UPLOAD_DIR,
   AVATAR_URL_BASE: process.env.AVATAR_URL_BASE,
+  SMTP_HOST: process.env.SMTP_HOST,
+  SMTP_PORT: process.env.SMTP_PORT,
+  SMTP_SECURE: process.env.SMTP_SECURE,
+  SMTP_USER: process.env.SMTP_USER,
+  SMTP_PASSWORD: process.env.SMTP_PASSWORD,
+  EMAIL_FROM: process.env.EMAIL_FROM,
+  EMAIL_REVIEW_INBOX: process.env.EMAIL_REVIEW_INBOX,
 });

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 
 import { ROUTES } from "@/constants/routes";
 import { registrationFormSchema } from "@/features/public-site/registration-schema";
@@ -9,6 +10,7 @@ import {
   clientAddress,
   recordRegistration,
 } from "@/server/auth/login-throttle";
+import { notifyRegistrationSubmitted } from "@/server/email/notify-registration";
 import { repositories } from "@/server/repositories";
 
 export interface RegisterResult {
@@ -32,6 +34,13 @@ export interface RegisterResult {
  * window bounds how many applications one source can queue. A submission that
  * trips the honeypot is answered as though it succeeded, because telling a bot
  * why it failed only helps it try again.
+ *
+ * Two emails follow — a receipt for the applicant and an alert for the review
+ * inbox — scheduled with `after` so they are sent once the applicant already
+ * has their answer. Handing SMTP a turn before the response would put a
+ * network round trip the applicant gains nothing from in front of their
+ * confirmation, and an unreachable mail server would make a registration that
+ * committed perfectly well look like it failed.
  */
 export async function registerAction(input: unknown): Promise<RegisterResult> {
   const parsed = registrationFormSchema.safeParse(input);
@@ -73,7 +82,7 @@ export async function registerAction(input: unknown): Promise<RegisterResult> {
       };
     }
 
-    const registrationCode = await repositories.registrations.create({
+    const created = await repositories.registrations.create({
       businessName: values.businessName,
       ownerName: values.ownerName,
       ownerEmail,
@@ -86,6 +95,35 @@ export async function registerAction(input: unknown): Promise<RegisterResult> {
 
     await recordRegistration(address);
 
+    // After the response, and outside the try: the row is committed, so a mail
+    // failure is not a registration failure and must not be answered as one.
+    // `notifyRegistrationSubmitted` does not throw, which is what keeps this
+    // callback from becoming an unhandled rejection nobody sees.
+    after(async () => {
+      const delivered = await notifyRegistrationSubmitted({
+        registrationId: created.id,
+        registrationCode: created.registrationCode,
+        businessName: values.businessName,
+        ownerName: values.ownerName,
+        ownerEmail,
+        ownerPhone: values.ownerPhone,
+        industry: values.industry,
+        region: values.region,
+        submittedAt: new Date(),
+      });
+
+      if (
+        !delivered.reviewers.ok &&
+        delivered.reviewers.reason !== "disabled"
+      ) {
+        // Worth a line of its own: the applicant has been told to wait for a
+        // decision, and nobody has been told there is one to make.
+        console.error(
+          `REGISTRATION ${created.registrationCode} NOT ANNOUNCED TO REVIEWERS — it is in the queue but no alert was delivered.`,
+        );
+      }
+    });
+
     // The back-office queue counts pending registrations in its navigation.
     revalidatePath(ROUTES.bo.registrations);
     revalidatePath(ROUTES.bo.dashboard);
@@ -93,7 +131,7 @@ export async function registerAction(input: unknown): Promise<RegisterResult> {
     return {
       success: true,
       message: "Application received.",
-      registrationCode,
+      registrationCode: created.registrationCode,
     };
   } catch (error: unknown) {
     console.error("Unable to record the registration.", error);

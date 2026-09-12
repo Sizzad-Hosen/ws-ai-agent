@@ -50,7 +50,7 @@ async function main(): Promise<void> {
   const businessName = `Verify Provision ${stamp}`;
   const email = `verify-prov-${stamp}@example.test`;
 
-  const code = await repositories.registrations.create({
+  const { registrationCode: code } = await repositories.registrations.create({
     businessName,
     ownerName: "Verify Owner",
     ownerEmail: email,

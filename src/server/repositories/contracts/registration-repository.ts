@@ -25,6 +25,17 @@ export interface NewRegistration {
   readonly requestedPlanId: string | null;
 }
 
+/** Identifies the row just written. */
+export interface CreatedRegistration {
+  readonly id: string;
+  /**
+   * The reference quoted to the applicant. Returned alongside the id because
+   * the two are wanted together: the code goes in the receipt, and the id
+   * builds the reviewer's link into the queue.
+   */
+  readonly registrationCode: string;
+}
+
 /** One reviewer verdict on one checklist item. */
 export interface RegistrationCheckDecision {
   readonly registrationId: string;
@@ -52,9 +63,8 @@ export interface RegistrationRepository {
   /**
    * Creates a pending registration together with its review checklist, so the
    * back-office queue never shows a registration with nothing to review.
-   * Returns the generated registration code.
    */
-  create(values: NewRegistration): Promise<string>;
+  create(values: NewRegistration): Promise<CreatedRegistration>;
   /**
    * Records a reviewer's verdict on one checklist item.
    *

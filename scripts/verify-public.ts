@@ -48,7 +48,7 @@ async function main(): Promise<void> {
   const pendingBefore = await repositories.registrations.countPending();
   const email = `verify-${Date.now()}@example.test`;
 
-  const code = await repositories.registrations.create({
+  const { registrationCode: code } = await repositories.registrations.create({
     businessName: "Verify Public Signup",
     ownerName: "Verify Owner",
     ownerEmail: email,

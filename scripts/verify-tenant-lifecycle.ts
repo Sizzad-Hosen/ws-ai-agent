@@ -34,7 +34,7 @@ async function main(): Promise<void> {
   if (!reviewer) throw new Error("No administrator exists to review with.");
 
   // ---- a visitor applies -------------------------------------------------
-  const code = await repositories.registrations.create({
+  const { registrationCode: code } = await repositories.registrations.create({
     businessName: "Verify Lifecycle Ltd",
     ownerName: "Verify Owner",
     ownerEmail: EMAIL,
