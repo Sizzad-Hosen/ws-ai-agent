@@ -13,8 +13,9 @@
     "typecheck": "next typegen && tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "postinstall": "prisma generate",
-    "db:generate": "prisma generate",
+    "postinstall": "prisma generate && prisma generate --schema prisma/tenant/schema.prisma",
+    "db:generate": "prisma generate && prisma generate --schema prisma/tenant/schema.prisma",
+    "tenant:sql": "node --import tsx scripts/generate-tenant-sql.ts",
     "db:local": "npx --yes prisma@7.10.0 dev --name ws-ai-agent --detach",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
@@ -29,7 +30,8 @@
     "verify:provisioning": "node --conditions=react-server --import tsx scripts/verify-provisioning.ts",
     "verify:lifecycle": "node --conditions=react-server --import tsx scripts/verify-tenant-lifecycle.ts",
     "verify:profile": "node --conditions=react-server --import tsx scripts/verify-profile.ts",
-    "verify:email": "node --conditions=react-server --import tsx scripts/verify-email.ts"
+    "verify:email": "node --conditions=react-server --import tsx scripts/verify-email.ts",
+    "verify:isolation": "node --conditions=react-server --import tsx scripts/verify-tenant-isolation.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

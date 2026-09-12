@@ -77,6 +77,29 @@ export interface ProvisioningRepository {
   ): Promise<void>;
   /** The database row for a tenant, for a retry after a failed provision. */
   findDatabaseTarget(tenantId: string): Promise<DatabaseTarget | null>;
+  /**
+   * Rewrites the pointers once the database actually exists.
+   *
+   * Written after provisioning rather than before it: until the database is
+   * created there is nowhere for them to point, and a row full of placeholder
+   * text is what stops any connection being opened from it.
+   */
+  setDatabaseConnection(
+    tenantId: string,
+    connection: DatabaseConnectionPointers,
+  ): Promise<void>;
+  /** The pointers written above, for opening a connection during provisioning. */
+  findDatabasePointers(
+    tenantId: string,
+  ): Promise<DatabaseConnectionPointers | null>;
+}
+
+/** Pointers, never credentials (S-03). */
+export interface DatabaseConnectionPointers {
+  readonly host: string;
+  readonly port: number;
+  readonly username: string;
+  readonly secretReference: string;
 }
 
 export interface RejectInput {

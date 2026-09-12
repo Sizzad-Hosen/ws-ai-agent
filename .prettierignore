@@ -4,4 +4,6 @@ package-lock.json
 public
 
 docs
+
+# Prisma's generated tenant client.
 src/generated

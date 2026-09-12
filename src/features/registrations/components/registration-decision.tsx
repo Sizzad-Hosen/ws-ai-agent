@@ -138,6 +138,31 @@ export function RegistrationDecision({
               value={provisioned.websiteUrl ?? "No root domain configured"}
             />
           </dl>
+
+          {provisioned.ownerPassword ? (
+            <div className="border-warning/40 bg-warning-container/40 mt-3 rounded-md border p-3">
+              <p className="text-foreground text-xs font-medium">
+                Owner sign-in — temporary
+              </p>
+              <p className="text-muted-foreground mt-1 text-xs">
+                This is the shared starting password. Anyone who knows the
+                owner&apos;s email can use it until they replace it, so send it
+                promptly and tell them to sign in. They must set their own
+                before the dashboard opens.
+              </p>
+              <dl className="mt-2 space-y-1.5 text-xs">
+                <Row label="Dashboard" value={provisioned.dashboardUrl} />
+                <Row label="Email" value={provisioned.ownerEmail ?? "—"} />
+                <Row label="Password" value={provisioned.ownerPassword} />
+              </dl>
+            </div>
+          ) : null}
+
+          {provisioned.databaseNote ? (
+            <p className="text-destructive mt-3 text-xs">
+              Database: {provisioned.databaseNote}
+            </p>
+          ) : null}
           <Link
             href={ROUTES.bo.tenant(provisioned.tenantId)}
             className="text-primary-deep mt-3 inline-flex items-center gap-1.5 text-xs font-medium hover:underline"
@@ -161,7 +186,7 @@ function Row({
   return (
     <div className="flex justify-between gap-3">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="tabular text-foreground truncate font-medium">{value}</dd>
+      <dd className="tabular text-foreground font-medium break-all">{value}</dd>
     </div>
   );
 }

@@ -1,6 +1,15 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Database, Globe, Hash, MessageSquare, Store, Tag } from "lucide-react";
+import {
+  Database,
+  ExternalLink,
+  Globe,
+  Hash,
+  LayoutDashboard,
+  MessageSquare,
+  Store,
+  Tag,
+} from "lucide-react";
 
 import { CopyableValue } from "@/components/shared/copyable-value";
 import { PageHeader } from "@/components/shared/page-header";
@@ -8,7 +17,9 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, Field } from "@/components/ui/card";
+import { env } from "@/config/env";
 import { PLATFORM_PERMISSIONS } from "@/constants/permissions";
+import { tenantWorkspaceUrls } from "@/features/tenant-dashboard/routes";
 import { ROUTES } from "@/constants/routes";
 import { InfrastructurePanel } from "@/features/tenants/components/infrastructure-panel";
 import {
@@ -38,6 +49,11 @@ export default async function TenantDetailPage({
   }
 
   const { tenant, planName, subscribedAt, infrastructure } = detail;
+  // Built from the slug rather than stored: one address, derived in one place,
+  // so it cannot drift from the route that actually serves it.
+  const workspace = tenant.slug
+    ? tenantWorkspaceUrls(env.NEXT_PUBLIC_APP_URL, tenant.slug)
+    : null;
   const canManage = hasPermission(
     admin.role,
     PLATFORM_PERMISSIONS.TENANTS_MANAGE,
@@ -97,6 +113,7 @@ export default async function TenantDetailPage({
                 approvalStatus={tenant.approvalStatus}
                 status={tenant.status}
                 websiteUrl={tenant.websiteUrl}
+                dashboardUrl={workspace?.dashboard ?? null}
                 canManage={canManage}
               />
             ) : null}
@@ -164,6 +181,85 @@ export default async function TenantDetailPage({
                   </span>
                 </Field>
               </div>
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="Workspace"
+              icon={<LayoutDashboard className="size-4" aria-hidden="true" />}
+            />
+            <CardBody className="space-y-6">
+              {workspace ? (
+                <>
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    <Field label="Dashboard">
+                      <a
+                        href={workspace.dashboard}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="text-primary-deep inline-flex items-center gap-1.5 text-[13px] font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                      >
+                        {workspace.dashboard}
+                        <ExternalLink
+                          className="size-3 shrink-0"
+                          aria-hidden="true"
+                        />
+                      </a>
+                    </Field>
+                    <Field label="Sign-in">
+                      <a
+                        href={workspace.login}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="text-primary-deep inline-flex items-center gap-1.5 text-[13px] font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                      >
+                        {workspace.login}
+                        <ExternalLink
+                          className="size-3 shrink-0"
+                          aria-hidden="true"
+                        />
+                      </a>
+                    </Field>
+                  </div>
+
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    <Field label="Storefront">
+                      {tenant.websiteUrl ? (
+                        <a
+                          href={tenant.websiteUrl}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="text-primary-deep inline-flex items-center gap-1.5 text-[13px] font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                        >
+                          {tenant.websiteUrl}
+                          <ExternalLink
+                            className="size-3 shrink-0"
+                            aria-hidden="true"
+                          />
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground text-[13px]">
+                          No site URL on file
+                        </span>
+                      )}
+                    </Field>
+                    <Field label="Address">
+                      <CopyableValue
+                        value={tenant.slug ?? ""}
+                        label="workspace address"
+                      />
+                    </Field>
+                  </div>
+                </>
+              ) : (
+                /* No slug means provisioning never assigned one, so there is
+                   no workspace to link to — a link built anyway would 404. */
+                <p className="text-muted-foreground text-[13px]">
+                  This tenant has no workspace address yet. It is assigned when
+                  the tenant is provisioned.
+                </p>
+              )}
             </CardBody>
           </Card>
 

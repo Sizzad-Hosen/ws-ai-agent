@@ -10,6 +10,7 @@ import { allChecksPassed } from "@/features/registrations/types";
 import { AUDIT_ACTIONS, recordAudit } from "@/server/audit/audit-log";
 import { requirePermission } from "@/server/auth/authorization";
 import { repositories } from "@/server/repositories";
+import { tenantBasePath } from "@/features/tenant-dashboard/routes";
 import { isAwaitingReview } from "@/types/status";
 import { provisionDatabaseForTenant } from "@/server/services/provision-tenant-database";
 
@@ -30,6 +31,14 @@ export interface RegistrationDecisionResult {
     /** Whether the physical database was created, and what to say if not. */
     readonly databaseReady: boolean;
     readonly databaseNote: string | null;
+    /**
+     * First sign-in credentials for the tenant's owner, shown once. There is no
+     * invitation mail in this application, so without these the workspace has
+     * nobody who can get into it.
+     */
+    readonly ownerEmail: string | null;
+    readonly ownerPassword: string | null;
+    readonly dashboardUrl: string;
   };
 }
 
@@ -194,6 +203,9 @@ export async function decideRegistrationAction(
       planName: plan.name,
       databaseReady: database.ok,
       databaseNote: database.ok ? null : database.reason,
+      ownerEmail: database.ok ? database.ownerEmail : null,
+      ownerPassword: database.ok ? database.ownerPassword : null,
+      dashboardUrl: `${env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "")}${tenantBasePath(outcome.tenant.subdomain)}/dashboard`,
     },
   };
 }
