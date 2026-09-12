@@ -9,35 +9,30 @@ export const dynamic = "force-dynamic";
 
 const paramsSchema = z.object({ id: z.uuid() });
 
-interface Context {
-  readonly params: Promise<{ readonly id: string }>;
-}
-
 /**
  * What the connect screen polls while the flow runs.
  *
- * Scoped to the signed-in tenant, so a session id belonging to another
- * workspace reads as not found rather than as forbidden — a 403 would confirm
- * the id exists.
+ * Under the workspace path so the path-scoped session cookie reaches it; see
+ * the start route for why.
  *
- * Carries the error **code** and not Meta's wording: the screen owns the
- * sentence, so the same failure reads the same way wherever it surfaces.
+ * Scoped to the signed-in tenant, so an attempt belonging to another workspace
+ * reads as not found rather than as forbidden — a 403 would confirm the id
+ * exists. Carries the error *code* and not Meta's wording, because the screen
+ * owns the sentence and the same failure should read the same way everywhere.
  */
 export async function GET(
-  request: Request,
-  context: Context,
+  _request: Request,
+  context: {
+    readonly params: Promise<{ readonly tenant: string; readonly id: string }>;
+  },
 ): Promise<Response> {
-  const slug = new URL(request.url).searchParams.get("tenant");
-
-  if (!slug) {
-    return apiError("Name the workspace this belongs to.", 400);
-  }
+  const { tenant: slug, id } = await context.params;
 
   const auth = await authorizeTenantRequest(slug);
 
   if (!auth.ok) return auth.response;
 
-  const params = paramsSchema.safeParse(await context.params);
+  const params = paramsSchema.safeParse({ id });
 
   if (!params.success) {
     return apiError("That is not a valid connection attempt.", 400);

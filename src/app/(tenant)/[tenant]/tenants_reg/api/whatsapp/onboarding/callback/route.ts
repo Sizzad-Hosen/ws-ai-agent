@@ -10,10 +10,13 @@ export const dynamic = "force-dynamic";
 /**
  * Finishes an Embedded Signup attempt.
  *
- * Everything in this body arrives from the browser and none of it is trusted.
- * The nonce decides which attempt this is; the `waba_id` is checked against
- * what Meta says the token actually grants before a single row is written.
- * See `completeOnboarding` for the ordering, which is the security design.
+ * Under the workspace path so the path-scoped tenant session cookie reaches it;
+ * see the start route for why.
+ *
+ * Everything in this body comes from the browser and none of it is trusted.
+ * The nonce decides which attempt this is, and the `waba_id` is checked against
+ * what Meta says the token actually grants before a single row is written. The
+ * ordering lives in `completeOnboarding`, and it is the security design.
  */
 const bodySchema = z
   .object({
@@ -22,19 +25,18 @@ const bodySchema = z
     wabaId: z.string().min(1, "Meta returned no business account."),
     phoneNumberId: z.string().min(1, "Meta returned no phone number."),
     /**
-     * The two-step PIN. Six digits, which is what Meta accepts; validated here
-     * so an obviously wrong value never becomes a Graph round trip.
+     * The two-step PIN. Six digits, which is what Meta accepts; checked here so
+     * an obviously wrong value never becomes a Graph round trip.
      */
     pin: z.string().regex(/^\d{6}$/, "The PIN must be six digits."),
   })
   .strict();
 
-export async function POST(request: Request): Promise<Response> {
-  const slug = new URL(request.url).searchParams.get("tenant");
-
-  if (!slug) {
-    return apiError("Name the workspace this belongs to.", 400);
-  }
+export async function POST(
+  request: Request,
+  context: { readonly params: Promise<{ readonly tenant: string }> },
+): Promise<Response> {
+  const { tenant: slug } = await context.params;
 
   const auth = await authorizeTenantRequest(slug);
 
@@ -64,9 +66,8 @@ export async function POST(request: Request): Promise<Response> {
     });
 
     if (!result.ok) {
-      // 200 with a failure body, not an HTTP error: the client polls the
-      // status endpoint either way, and the code is what the screen maps to a
-      // sentence. An HTTP 4xx here would tell the browser less, not more.
+      // 200 with a failure body rather than an HTTP error: the screen maps the
+      // code to a sentence, and a 4xx would tell the browser less, not more.
       return apiData({
         connected: false,
         sessionId: result.sessionId,

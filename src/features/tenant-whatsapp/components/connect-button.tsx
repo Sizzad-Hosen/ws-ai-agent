@@ -5,6 +5,7 @@ import { LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { tenantBasePath } from "@/features/tenant-dashboard/routes";
 import { readableError } from "@/features/tenant-whatsapp/connection";
 
 /**
@@ -72,6 +73,10 @@ export function ConnectButton({
   disabledReason,
 }: ConnectButtonProps) {
   const router = useRouter();
+  // The onboarding endpoints sit under the workspace path on purpose: the
+  // tenant session cookie is scoped to it, so a route anywhere else never
+  // receives the cookie and reads every caller as signed out.
+  const basePath = tenantBasePath(slug);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -135,7 +140,7 @@ export function ConnectButton({
   const finish = useCallback(
     async (start: StartPayload, code: string, pin: string) => {
       const response = await fetch(
-        `/api/whatsapp/onboarding/callback?tenant=${encodeURIComponent(slug)}`,
+        `${basePath}/api/whatsapp/onboarding/callback`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -168,7 +173,7 @@ export function ConnectButton({
       setBusy(false);
       router.refresh();
     },
-    [router, slug],
+    [router, basePath],
   );
 
   async function onClick(): Promise<void> {
@@ -198,7 +203,7 @@ export function ConnectButton({
 
     try {
       const response = await fetch(
-        `/api/whatsapp/onboarding/start?tenant=${encodeURIComponent(slug)}`,
+        `${basePath}/api/whatsapp/onboarding/start`,
         { method: "POST" },
       );
 
