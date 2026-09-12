@@ -79,8 +79,16 @@ const PLANS = [
       version: 1,
       toggles: [
         { key: "knowledge_base", label: "Knowledge Base", enabled: true },
-        { key: "analytics_advanced", label: "Analytics (Advanced)", enabled: true },
-        { key: "white_label_handoff", label: "White-label Handoff", enabled: true },
+        {
+          key: "analytics_advanced",
+          label: "Analytics (Advanced)",
+          enabled: true,
+        },
+        {
+          key: "white_label_handoff",
+          label: "White-label Handoff",
+          enabled: true,
+        },
       ],
       highlights: [
         "Unlimited WhatsApp numbers",
