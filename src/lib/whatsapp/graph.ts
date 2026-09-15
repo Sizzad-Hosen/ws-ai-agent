@@ -434,16 +434,63 @@ export async function sendText(
 
   if (!result.ok) return result;
 
-  const messages = Array.isArray(result.data.messages)
-    ? result.data.messages
-    : [];
-  const first = messages[0];
+  return {
+    ok: true,
+    data: { messageId: firstMessageId(result.data.messages) },
+  };
+}
+
+/**
+ * Sends an approved template.
+ *
+ * The only thing that can be sent to somebody who has not messaged first.
+ * Outside the 24-hour service window Meta refuses free-form text, which is why
+ * the wizard's test message is `hello_world` and not "hello" — the tenant has
+ * never messaged their own number from it.
+ *
+ * `components` is passed through as Meta defines it rather than modelled here.
+ * A template with no variables — `hello_world` — takes none at all, and
+ * sending an empty array is not the same as omitting the field.
+ */
+export async function sendTemplate(
+  config: GraphConfig,
+  phoneNumberId: string,
+  token: string,
+  to: string,
+  name: string,
+  language: string,
+  components?: readonly unknown[],
+): Promise<GraphResult<{ messageId: string | null }>> {
+  const result = await call<{ messages?: unknown }>(
+    endpoint(config, `${phoneNumberId}/messages`),
+    {
+      method: "POST",
+      headers: authorised(token),
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to,
+        type: "template",
+        template: {
+          name,
+          language: { code: language },
+          ...(components && components.length > 0 ? { components } : {}),
+        },
+      }),
+    },
+  );
+
+  if (!result.ok) return result;
 
   return {
     ok: true,
-    data: {
-      messageId:
-        isRecord(first) && typeof first.id === "string" ? first.id : null,
-    },
+    data: { messageId: firstMessageId(result.data.messages) },
   };
+}
+
+/** Meta answers a send with `messages: [{ id }]`. Null when it does not. */
+function firstMessageId(messages: unknown): string | null {
+  const first = Array.isArray(messages) ? messages[0] : null;
+
+  return isRecord(first) && typeof first.id === "string" ? first.id : null;
 }

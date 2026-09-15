@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import {
   Check,
   CircleAlert,
@@ -13,6 +14,7 @@ import { Card, CardBody, CardHeader, Field } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { env } from "@/config/env";
 import { TenantShell } from "@/features/tenant-dashboard/components/tenant-shell";
+import { tenantHref } from "@/features/tenant-dashboard/routes";
 import {
   CONNECTION_LABELS,
   CONNECTION_STEPS,
@@ -377,6 +379,20 @@ function NotConnectedState({
                 : "Connecting is unavailable until the platform operator finishes setting up its Meta app."
             }
           />
+
+          {/*
+            The manual path, offered second on purpose. Meta's popup is fewer
+            steps and needs no Meta app of the tenant's own — but it fails
+            outright for an owner whose Facebook account is restricted from
+            advertising, and that owner needs somewhere to go other than a
+            support call.
+          */}
+          <Link
+            href={`${tenantHref(slug, "whatsapp")}/connect`}
+            className="text-muted-foreground hover:text-foreground text-sm underline underline-offset-4"
+          >
+            Or set it up with your own Meta app, step by step
+          </Link>
         </CardBody>
       </Card>
 
