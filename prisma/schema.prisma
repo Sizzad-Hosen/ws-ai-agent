@@ -268,14 +268,14 @@ model AdminUser {
   createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  sessions          AdminSession[]
-  auditLogs         AdminAuditLog[]
-  reviewed          TenantRegistration[]     @relation("RegistrationReviewer")
-  checked           TenantRegistrationCheck[]
-  approvedTenants   Tenant[]                 @relation("TenantApprover")
-  featureOverrides  TenantFeatureOverride[]
-  settings          PlatformSetting[]
-  posts             BlogPost[]
+  sessions         AdminSession[]
+  auditLogs        AdminAuditLog[]
+  reviewed         TenantRegistration[]      @relation("RegistrationReviewer")
+  checked          TenantRegistrationCheck[]
+  approvedTenants  Tenant[]                  @relation("TenantApprover")
+  featureOverrides TenantFeatureOverride[]
+  settings         PlatformSetting[]
+  posts            BlogPost[]
 
   @@map("admin_users")
 }
@@ -292,8 +292,8 @@ model AdminSession {
   expiresAt             DateTime  @map("expires_at") @db.Timestamptz(6)
   revokedAt             DateTime? @map("revoked_at") @db.Timestamptz(6)
 
-  adminUser            AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  impersonatingTenant  Tenant?   @relation(fields: [impersonatingTenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  adminUser           AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  impersonatingTenant Tenant?   @relation(fields: [impersonatingTenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
   @@map("admin_sessions")
 }
@@ -381,33 +381,33 @@ model TenantRegistrationCheck {
 // --------------------------------------------------------------------- tenants
 
 model Tenant {
-  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantCode        String                @unique(map: "uq_tenants_tenant_code") @map("tenant_code") @db.VarChar(40)
-  slug              String                @unique(map: "uq_tenants_slug") @db.VarChar(63)
-  registrationId    String?               @unique(map: "uq_tenants_registration_id") @map("registration_id") @db.Uuid
-  businessName      String                @map("business_name") @db.VarChar(180)
-  industry          String?               @db.VarChar(100)
-  businessRegion    String?               @map("business_region") @db.VarChar(80)
-  countryCode       String?               @map("country_code") @db.Char(2)
-  timezone          String?               @db.VarChar(64)
-  defaultLocale     String?               @map("default_locale") @db.VarChar(10)
-  currency          String?               @db.Char(3)
+  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantCode        String               @unique(map: "uq_tenants_tenant_code") @map("tenant_code") @db.VarChar(40)
+  slug              String               @unique(map: "uq_tenants_slug") @db.VarChar(63)
+  registrationId    String?              @unique(map: "uq_tenants_registration_id") @map("registration_id") @db.Uuid
+  businessName      String               @map("business_name") @db.VarChar(180)
+  industry          String?              @db.VarChar(100)
+  businessRegion    String?              @map("business_region") @db.VarChar(80)
+  countryCode       String?              @map("country_code") @db.Char(2)
+  timezone          String?              @db.VarChar(64)
+  defaultLocale     String?              @map("default_locale") @db.VarChar(10)
+  currency          String?              @db.Char(3)
   /// Half of the circular pair. Nullable, so a tenant row can exist before its
   /// owner row does. Approval writes the tenant, then the owner, then this.
-  ownerTenantUserId String?               @map("owner_tenant_user_id") @db.Uuid
-  ownerName         String                @map("owner_name") @db.VarChar(120)
-  ownerEmail        String                @map("owner_email") @db.VarChar(190)
-  ownerPhone        String?               @map("owner_phone") @db.VarChar(30)
-  approvalStatus    TenantApprovalStatus  @default(PENDING_REVIEW) @map("approval_status")
-  approvedAt        DateTime?             @map("approved_at") @db.Timestamptz(6)
-  approvedBy        String?               @map("approved_by") @db.Uuid
-  rejectedAt        DateTime?             @map("rejected_at") @db.Timestamptz(6)
-  rejectionReason   String?               @map("rejection_reason")
-  status            TenantStatus          @default(PROVISIONING)
-  provisioningError String?               @map("provisioning_error")
-  deletedAt         DateTime?             @map("deleted_at") @db.Timestamptz(6)
-  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  ownerTenantUserId String?              @map("owner_tenant_user_id") @db.Uuid
+  ownerName         String               @map("owner_name") @db.VarChar(120)
+  ownerEmail        String               @map("owner_email") @db.VarChar(190)
+  ownerPhone        String?              @map("owner_phone") @db.VarChar(30)
+  approvalStatus    TenantApprovalStatus @default(PENDING_REVIEW) @map("approval_status")
+  approvedAt        DateTime?            @map("approved_at") @db.Timestamptz(6)
+  approvedBy        String?              @map("approved_by") @db.Uuid
+  rejectedAt        DateTime?            @map("rejected_at") @db.Timestamptz(6)
+  rejectionReason   String?              @map("rejection_reason")
+  status            TenantStatus         @default(PROVISIONING)
+  provisioningError String?              @map("provisioning_error")
+  deletedAt         DateTime?            @map("deleted_at") @db.Timestamptz(6)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   /// Restrict, not SetNull: deleting an application must never silently orphan
   /// the live tenant it produced.
@@ -415,7 +415,7 @@ model Tenant {
   approver     AdminUser?          @relation("TenantApprover", fields: [approvedBy], references: [id], onDelete: Restrict, onUpdate: NoAction)
   owner        TenantUser?         @relation("TenantOwner", fields: [ownerTenantUserId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
-  users                TenantUser[]             @relation("TenantMembers")
+  users                TenantUser[]                @relation("TenantMembers")
   database             TenantDatabase?
   subscriptions        Subscription[]
   subscriptionUsage    SubscriptionUsage[]
@@ -489,8 +489,8 @@ model TenantUser {
   lastLoginAt         DateTime?        @map("last_login_at") @db.Timestamptz(6)
   deletedAt           DateTime?        @map("deleted_at") @db.Timestamptz(6)
 
-  tenant   Tenant               @relation("TenantMembers", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  ownerOf  Tenant[]             @relation("TenantOwner")
+  tenant   Tenant              @relation("TenantMembers", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  ownerOf  Tenant[]            @relation("TenantOwner")
   sessions TenantUserSession[]
 
   @@unique([tenantId, email], map: "uq_tenant_users_tenant_email")
@@ -523,6 +523,9 @@ model Plan {
   annualPrice        Decimal? @map("annual_price") @db.Decimal(12, 2)
   currency           String   @default("BDT") @db.Char(3)
   maxWhatsappNumbers Int      @default(0) @map("max_whatsapp_numbers")
+  /// Whether this tier may borrow the platform sandbox number before
+  /// connecting one of its own. Read by the first wizard screen.
+  allowsSandbox      Boolean  @default(false) @map("allows_sandbox")
   maxAiMessages      Int      @default(0) @map("max_ai_messages")
   maxProducts        Int      @default(0) @map("max_products")
   /// INFERRED. Marketing content for the pricing cards. The versioned
@@ -541,25 +544,25 @@ model Plan {
 }
 
 model Subscription {
-  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId          String             @map("tenant_id") @db.Uuid
-  planId            String             @map("plan_id") @db.Uuid
-  status            SubscriptionStatus @default(TRIALING)
-  billingCycle      BillingCycle       @default(MONTHLY) @map("billing_cycle")
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String             @map("tenant_id") @db.Uuid
+  planId             String             @map("plan_id") @db.Uuid
+  status             SubscriptionStatus @default(TRIALING)
+  billingCycle       BillingCycle       @default(MONTHLY) @map("billing_cycle")
   /// Price agreed at signup. A catalogue edit never reprices a subscriber.
-  priceSnapshot     Decimal            @map("price_snapshot") @db.Decimal(12, 2)
-  currency          String             @db.Char(3)
+  priceSnapshot      Decimal            @map("price_snapshot") @db.Decimal(12, 2)
+  currency           String             @db.Char(3)
   /// Limits copied at signup. Editing a plan must never rewrite this.
-  limitsSnapshot    Json               @map("limits_snapshot")
-  trialEndsAt       DateTime?          @map("trial_ends_at") @db.Timestamptz(6)
-  startedAt         DateTime           @map("started_at") @db.Timestamptz(6)
+  limitsSnapshot     Json               @map("limits_snapshot")
+  trialEndsAt        DateTime?          @map("trial_ends_at") @db.Timestamptz(6)
+  startedAt          DateTime           @map("started_at") @db.Timestamptz(6)
   /// INFERRED, with the five fields below it.
-  currentPeriodStart DateTime          @map("current_period_start") @db.Timestamptz(6)
-  currentPeriodEnd   DateTime          @map("current_period_end") @db.Timestamptz(6)
-  cancelAtPeriodEnd  Boolean           @default(false) @map("cancel_at_period_end")
-  cancelledAt        DateTime?         @map("cancelled_at") @db.Timestamptz(6)
-  provider           String?           @db.VarChar(30)
-  providerReference  String?           @map("provider_reference") @db.VarChar(190)
+  currentPeriodStart DateTime           @map("current_period_start") @db.Timestamptz(6)
+  currentPeriodEnd   DateTime           @map("current_period_end") @db.Timestamptz(6)
+  cancelAtPeriodEnd  Boolean            @default(false) @map("cancel_at_period_end")
+  cancelledAt        DateTime?          @map("cancelled_at") @db.Timestamptz(6)
+  provider           String?            @db.VarChar(30)
+  providerReference  String?            @map("provider_reference") @db.VarChar(190)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   /// Restrict: a plan with subscribers cannot be deleted out from under them.
@@ -636,35 +639,46 @@ model Payment {
 // -------------------------------------------------------------------- whatsapp
 
 model WhatsappAccount {
-  id                 String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId           String                @map("tenant_id") @db.Uuid
-  phoneNumberId      String                @unique(map: "uq_whatsapp_accounts_phone_number_id") @map("phone_number_id") @db.VarChar(150)
-  wabaId             String                @map("waba_id") @db.VarChar(150)
-  displayPhoneNumber String?               @map("display_phone_number") @db.VarChar(40)
+  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String                @map("tenant_id") @db.Uuid
+  phoneNumberId        String                @unique(map: "uq_whatsapp_accounts_phone_number_id") @map("phone_number_id") @db.VarChar(150)
+  wabaId               String                @map("waba_id") @db.VarChar(150)
+  displayPhoneNumber   String?               @map("display_phone_number") @db.VarChar(40)
   /// The name Meta approved for the number, which is what a customer sees.
-  verifiedName       String?               @map("verified_name") @db.VarChar(180)
-  businessName       String?               @map("business_name") @db.VarChar(180)
+  verifiedName         String?               @map("verified_name") @db.VarChar(180)
+  businessName         String?               @map("business_name") @db.VarChar(180)
   /// An AES-256-GCM envelope, not a pointer: this deployment has no secret
   /// manager, and a column named *_reference that holds a secret is one
   /// somebody later logs believing it is only an identifier.
-  accessTokenEncrypted String?             @map("access_token_encrypted")
-  tokenExpiresAt     DateTime?             @map("token_expires_at") @db.Timestamptz(6)
-  webhookVerifyToken String?               @map("webhook_verify_token") @db.VarChar(190)
-  appSecretReference String?               @map("app_secret_reference")
+  accessTokenEncrypted String?               @map("access_token_encrypted")
+  tokenExpiresAt       DateTime?             @map("token_expires_at") @db.Timestamptz(6)
+  webhookVerifyToken   String?               @map("webhook_verify_token") @db.VarChar(190)
+  appSecretReference   String?               @map("app_secret_reference")
+  /// The tenant's own Meta app secret, encrypted the same way the token is.
+  /// Null for a row on the platform app, which verifies against META_APP_SECRET.
+  appSecretEncrypted   String?               @map("app_secret_encrypted")
+  /// How far the tenant has reached in the connect wizard, 1 to 5. The row is
+  /// the only thing that survives a closed tab, so progress lives here.
+  setupStep            Int                   @default(1) @map("setup_step") @db.SmallInt
+  /// embedded_signup | manual | sandbox. Not an enum: master-db.sql models
+  /// none, and a check constraint is cheaper to widen than a Postgres type.
+  onboardingMethod     String                @default("embedded_signup") @map("onboarding_method") @db.VarChar(20)
+  /// Riding the platform number. Its deliveries carry the platform signature.
+  isSandbox            Boolean               @default(false) @map("is_sandbox")
   /// INFERRED, with the five fields below it. These are the least certain
   /// columns in the schema; only their widths are readable in the diagram.
-  status             WhatsappAccountStatus @default(PENDING)
-  qualityRating      String?               @map("quality_rating") @db.VarChar(30)
-  messagingLimit     String?               @map("messaging_limit") @db.VarChar(30)
-  provider           String?               @db.VarChar(30)
+  status               WhatsappAccountStatus @default(PENDING)
+  qualityRating        String?               @map("quality_rating") @db.VarChar(30)
+  messagingLimit       String?               @map("messaging_limit") @db.VarChar(30)
+  provider             String?               @db.VarChar(30)
   /// When POST /{WABA_ID}/subscribed_apps last succeeded and was read back.
-  subscribedAt       DateTime?             @map("subscribed_at") @db.Timestamptz(6)
+  subscribedAt         DateTime?             @map("subscribed_at") @db.Timestamptz(6)
   /// The last time anything arrived for this number. A silent number that
   /// claims to be live is the failure this column exists to make visible.
-  lastWebhookAt      DateTime?             @map("last_webhook_at") @db.Timestamptz(6)
-  lastError          String?               @map("last_error")
-  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lastWebhookAt        DateTime?             @map("last_webhook_at") @db.Timestamptz(6)
+  lastError            String?               @map("last_error")
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 

@@ -258,6 +258,9 @@ CREATE TABLE plans (
     annual_price         numeric(12,2),
     currency             char(3) NOT NULL DEFAULT 'BDT',
     max_whatsapp_numbers int NOT NULL DEFAULT 0,
+    -- Manual onboarding (20260915090000). Whether the tier may borrow the
+    -- platform sandbox number before connecting one of its own.
+    allows_sandbox       boolean NOT NULL DEFAULT false,
     max_ai_messages      int NOT NULL DEFAULT 0,
     max_products         int NOT NULL DEFAULT 0,
     -- INFERRED. Marketing content for the pricing cards: toggles, highlights,
@@ -351,6 +354,13 @@ CREATE TABLE whatsapp_accounts (
     token_expires_at     timestamptz(6),
     webhook_verify_token varchar(190),
     app_secret_reference text,
+    -- Manual onboarding (20260915090000). A tenant connecting a number from
+    -- their own Meta app signs deliveries with that app's secret, so it is
+    -- encrypted here rather than pointed at; null on the platform app.
+    app_secret_encrypted text,
+    setup_step           smallint NOT NULL DEFAULT 1,      -- wizard progress, 1..5
+    onboarding_method    varchar(20) NOT NULL DEFAULT 'embedded_signup',
+    is_sandbox           boolean NOT NULL DEFAULT false,
     status               whatsapp_account_status NOT NULL DEFAULT 'pending', -- INFERRED
     quality_rating       varchar(30),                                        -- INFERRED
     messaging_limit      varchar(30),                                        -- INFERRED
