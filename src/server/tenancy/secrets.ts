@@ -121,6 +121,48 @@ export class LocalProvisionerSecretProvider implements SecretProvider {
   }
 }
 
+/**
+ * Scheme naming an environment variable directly: `env:WHATSAPP_ACCESS_TOKEN`.
+ *
+ * The narrowest useful form of the reference indirection. A row says *which*
+ * credential it wants and still holds none, so a development fixture — the
+ * platform test number, whose token Meta rotates every 24 hours — can be
+ * seeded without a vault and without writing a token into the database that
+ * would be stale by tomorrow.
+ *
+ * `EnvSecretProvider` above solves a different problem: it maps many opaque
+ * references through one JSON blob. This maps one reference to one variable,
+ * which is what a fixture needs and what a person reading the row can follow.
+ *
+ * Refused outside development, like the others, and for the same reason: the
+ * point of a reference is that credentials do not live in configuration, and
+ * an environment variable is configuration.
+ */
+const ENV_SCHEME = "env:";
+
+export function envSecretReference(variableName: string): string {
+  return `${ENV_SCHEME}${variableName}`;
+}
+
+export class EnvReferenceSecretProvider implements SecretProvider {
+  readonly name = "env-reference";
+
+  async resolve(reference: string): Promise<string | null> {
+    if (!reference.startsWith(ENV_SCHEME)) return null;
+
+    const variable = reference.slice(ENV_SCHEME.length).trim();
+
+    // Anything but a plain variable name is refused rather than looked up:
+    // `env:` references are written into rows, and a row is not a place to
+    // accept an arbitrary key into this process's environment.
+    if (!/^[A-Z][A-Z0-9_]{0,99}$/.test(variable)) return null;
+
+    const value = process.env[variable];
+
+    return value === undefined || value === "" ? null : value;
+  }
+}
+
 /** Tries each provider in turn; the first to resolve wins. */
 export class ChainedSecretProvider implements SecretProvider {
   readonly name: string;

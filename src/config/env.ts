@@ -83,6 +83,24 @@ const serverEnvSchema = z.object({
    * clear. Losing this key makes every stored token unreadable.
    */
   WHATSAPP_TOKEN_ENCRYPTION_KEY: z.string().trim().default(""),
+  /**
+   * The platform's own test number, and the credentials for it.
+   *
+   * These are development fixtures, not a tenant's connection. Meta hands a
+   * new app one test number with a 24-hour token, and this is how the seeded
+   * demo tenant reaches it without anybody completing Embedded Signup or
+   * business verification.
+   *
+   * `WHATSAPP_VERIFY_TOKEN` is read as the fallback for
+   * `META_WEBHOOK_VERIFY_TOKEN` below. Meta's own setup screen calls this
+   * field "Verify token" with no "Meta" in the name, so that is what people
+   * put in their .env, and a handshake failing because the two names disagree
+   * looks exactly like a wrong token.
+   */
+  WHATSAPP_PHONE_NUMBER_ID: z.string().trim().default(""),
+  WHATSAPP_WABA_ID: z.string().trim().default(""),
+  WHATSAPP_ACCESS_TOKEN: z.string().trim().default(""),
+  WHATSAPP_VERIFY_TOKEN: z.string().trim().default(""),
 });
 
 export const env = serverEnvSchema.parse({
@@ -101,8 +119,17 @@ export const env = serverEnvSchema.parse({
   EMAIL_REVIEW_INBOX: process.env.EMAIL_REVIEW_INBOX,
   META_APP_ID: process.env.META_APP_ID,
   META_APP_SECRET: process.env.META_APP_SECRET,
-  META_WEBHOOK_VERIFY_TOKEN: process.env.META_WEBHOOK_VERIFY_TOKEN,
+  // Either name works. Meta's setup screen labels this field "Verify token",
+  // so WHATSAPP_VERIFY_TOKEN is what ends up in most .env files — and a GET
+  // handshake answering 503 because the app read the other name is
+  // indistinguishable, from Meta's side, from a token that does not match.
+  META_WEBHOOK_VERIFY_TOKEN:
+    process.env.META_WEBHOOK_VERIFY_TOKEN ?? process.env.WHATSAPP_VERIFY_TOKEN,
   META_CONFIG_ID: process.env.META_CONFIG_ID,
   META_GRAPH_VERSION: process.env.META_GRAPH_VERSION,
   WHATSAPP_TOKEN_ENCRYPTION_KEY: process.env.WHATSAPP_TOKEN_ENCRYPTION_KEY,
+  WHATSAPP_PHONE_NUMBER_ID: process.env.WHATSAPP_PHONE_NUMBER_ID,
+  WHATSAPP_WABA_ID: process.env.WHATSAPP_WABA_ID,
+  WHATSAPP_ACCESS_TOKEN: process.env.WHATSAPP_ACCESS_TOKEN,
+  WHATSAPP_VERIFY_TOKEN: process.env.WHATSAPP_VERIFY_TOKEN,
 });
