@@ -310,6 +310,63 @@ export async function getPhoneNumber(
 }
 
 /**
+ * Every number on a WhatsApp Business Account.
+ *
+ * The read that proves partner access worked. `getPhoneNumber` above answers
+ * for one number the caller already knows; this answers "which numbers may we
+ * see at all", which is the question step 5 of Manual setup asks.
+ *
+ * A tenant who has not finished Assign Partners gets a 403 from Meta here, and
+ * one who has gets a list — so the call is the check, and no separate
+ * permission probe is needed.
+ */
+export async function listPhoneNumbers(
+  config: GraphConfig,
+  wabaId: string,
+  token: string,
+): Promise<GraphResult<readonly PhoneNumber[]>> {
+  const url = new URL(endpoint(config, `${wabaId}/phone_numbers`));
+  url.searchParams.set(
+    "fields",
+    "id,display_phone_number,verified_name,quality_rating,code_verification_status",
+  );
+
+  const result = await call<{ data?: unknown }>(url.toString(), {
+    method: "GET",
+    headers: authorised(token),
+  });
+
+  if (!result.ok) return result;
+
+  const rows = Array.isArray(result.data.data) ? result.data.data : [];
+  const numbers: PhoneNumber[] = [];
+
+  for (const row of rows) {
+    if (!isRecord(row)) continue;
+
+    const id = row.id;
+
+    // A row with no id is one nothing could be done with afterwards, so it is
+    // dropped rather than rendered as a blank choice.
+    if (typeof id !== "string" || id === "") continue;
+
+    const text = (key: string): string | null =>
+      typeof row[key] === "string" ? (row[key] as string) : null;
+
+    numbers.push({
+      id,
+      displayPhoneNumber: text("display_phone_number"),
+      verifiedName: text("verified_name"),
+      qualityRating: text("quality_rating"),
+      messagingLimit: text("messaging_limit_tier"),
+      codeVerificationStatus: text("code_verification_status"),
+    });
+  }
+
+  return { ok: true, data: numbers };
+}
+
+/**
  * Registers a number for the Cloud API.
  *
  * Required before the number can send or receive through the Cloud API at all.

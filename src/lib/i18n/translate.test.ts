@@ -72,10 +72,11 @@ describe("the message tables", () => {
       const english = MESSAGES.en[key as keyof typeof MESSAGES.en];
       const bangla = MESSAGES.bn[key as keyof typeof MESSAGES.bn];
 
-      // Meta's own field labels stay in English on purpose: the tenant is
-      // looking for that exact text on Meta's screen.
+      // Meta's own field labels and product names stay in English on purpose:
+      // the tenant is hunting for that exact text on Meta's screen, and a
+      // translated "Meta Business" is a button they will never find.
       const isMetaLabel =
-        /^(Phone number ID|WhatsApp Business Account ID|Callback URL|Verify token)$/.test(
+        /^(Phone number ID|WhatsApp Business Account ID|Callback URL|Verify token|Meta Business)$/.test(
           english,
         );
 

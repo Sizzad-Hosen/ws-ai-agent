@@ -23,6 +23,7 @@ import {
   ScreenshotSlot,
   WizardShell,
 } from "@/features/tenant-whatsapp/components/wizard/wizard-shell";
+import { readTenantLocale } from "@/features/tenant-dashboard/tenant-locale";
 import { resolveLocale, translatorFor } from "@/lib/i18n/translate";
 import { getTenantContext } from "@/server/tenancy/tenant-context";
 import { prisma } from "@/server/db/prisma";
@@ -233,20 +234,4 @@ export default async function TenantWhatsappConnectPage({
       </WizardShell>
     </TenantShell>
   );
-}
-
-/**
- * The tenant's chosen language.
- *
- * Nullable on every row today, so `resolveLocale` decides the fallback rather
- * than this. Read here rather than threaded through `ResolvedTenant`, which
- * does not carry it.
- */
-async function readTenantLocale(tenantId: string): Promise<string | null> {
-  const row = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { defaultLocale: true },
-  });
-
-  return row?.defaultLocale ?? null;
 }

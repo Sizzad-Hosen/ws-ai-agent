@@ -73,6 +73,28 @@ const serverEnvSchema = z.object({
   META_WEBHOOK_VERIFY_TOKEN: z.string().trim().default(""),
   /** The Embedded Signup configuration id. Public by design, unlike the rest. */
   META_CONFIG_ID: z.string().trim().default(""),
+  /**
+   * The platform's own Meta Business ID, shown to a tenant in Manual setup.
+   *
+   * A tenant pastes it into Assign Partners on their own WhatsApp Business
+   * Account, which is how partner access is granted. Public by design: it
+   * identifies us to Meta and is meant to be read off the screen.
+   *
+   * Empty means this deployment is not an approved partner yet, and the
+   * Manual setup tab says so rather than asking a shop owner to paste nothing.
+   */
+  META_PARTNER_BUSINESS_ID: z.string().trim().default(""),
+  /**
+   * Our own system-user token, used for partner access.
+   *
+   * Once a tenant grants us partial access to their WhatsApp Business Account,
+   * this is the credential that reads their numbers and subscribes our app —
+   * they never issue us a token of their own. Never sent to the browser and
+   * never logged.
+   *
+   * Empty means partner access is unavailable, and Manual setup says so.
+   */
+  PLATFORM_WA_ACCESS_TOKEN: z.string().trim().default(""),
   /** Graph API version, e.g. v21.0. */
   META_GRAPH_VERSION: z.string().trim().default("v21.0"),
   /**
@@ -126,6 +148,8 @@ export const env = serverEnvSchema.parse({
   META_WEBHOOK_VERIFY_TOKEN:
     process.env.META_WEBHOOK_VERIFY_TOKEN ?? process.env.WHATSAPP_VERIFY_TOKEN,
   META_CONFIG_ID: process.env.META_CONFIG_ID,
+  META_PARTNER_BUSINESS_ID: process.env.META_PARTNER_BUSINESS_ID,
+  PLATFORM_WA_ACCESS_TOKEN: process.env.PLATFORM_WA_ACCESS_TOKEN,
   META_GRAPH_VERSION: process.env.META_GRAPH_VERSION,
   WHATSAPP_TOKEN_ENCRYPTION_KEY: process.env.WHATSAPP_TOKEN_ENCRYPTION_KEY,
   WHATSAPP_PHONE_NUMBER_ID: process.env.WHATSAPP_PHONE_NUMBER_ID,
